@@ -43,3 +43,8 @@ next-env.d.ts
 # database
 prisma/dev.db
 prisma/dev.db-journal
+
+# نسخ iCloud المكررة
+*[0-9].tsx
+*[0-9].css
+*[0-9].ts
