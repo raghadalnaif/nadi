@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { issueInvoice } from "@/lib/invoicing";
+import { postExpense, postPayment } from "@/lib/ledger";
 
 // يمنع تعديل بيانات نادٍ آخر — تُستدعى في كل إجراء
 async function memberOfMyClub(memberId: string, clubId: string) {
@@ -211,7 +212,10 @@ export async function addExpense(formData: FormData) {
   const amountSAR = Number(formData.get("amountSAR"));
   if (!description || !Number.isFinite(amountSAR) || amountSAR <= 0) return;
 
-  await db.expense.create({ data: { clubId: user.clubId!, category, description, amountSAR } });
+  const exp = await db.expense.create({
+    data: { clubId: user.clubId!, category, description, amountSAR },
+  });
+  await postExpense(exp.id);
   revalidatePath("/app/accounting");
 }
 
@@ -225,6 +229,7 @@ export async function payInvoice(formData: FormData) {
 
   await db.invoice.update({ where: { id: invoiceId }, data: { status: "paid" } });
   await db.payment.create({ data: { invoiceId, method, amountSAR: invoice.totalSAR } });
+  await postPayment(invoiceId, method, invoice.totalSAR);
 
   revalidatePath("/app/accounting");
   revalidatePath("/app/invoices");
@@ -245,7 +250,7 @@ export async function payPayroll(formData: FormData) {
     data: { status: "paid", paidAt: new Date() },
   });
   // صرف الراتب يُقيَّد مصروفاً تلقائياً
-  await db.expense.create({
+  const salaryExpense = await db.expense.create({
     data: {
       clubId: user.clubId!,
       category: "رواتب",
@@ -253,6 +258,7 @@ export async function payPayroll(formData: FormData) {
       amountSAR: payroll.netSAR,
     },
   });
+  await postExpense(salaryExpense.id);
 
   revalidatePath("/app/hr");
   revalidatePath("/app/accounting");

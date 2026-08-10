@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { GENESIS_PIH, sealInvoice, splitVat } from "./zatca";
+import { postInvoice } from "./ledger";
 
 // المُصدِر المركزي للفواتير — كل فاتورة في النظام تمر من هنا
 // لتضمن تسلسل الأرقام، وتسلسل العدّاد (ICV)، وسلسلة الهاش (PIH).
@@ -73,7 +74,7 @@ export async function issueInvoice(input: {
 
   const status = input.status ?? "paid";
 
-  return db.invoice.create({
+  const created = await db.invoice.create({
     data: {
       clubId: club.id,
       memberId: input.memberId ?? null,
@@ -106,6 +107,11 @@ export async function issueInvoice(input: {
           : undefined,
     },
   });
+
+  // ترحيل محاسبي تلقائي بقيد مزدوج
+  await postInvoice(created.id);
+
+  return created;
 }
 
 // يتحقق من سلامة سلسلة الفواتير — أي تلاعب يكسر الترابط

@@ -1,9 +1,12 @@
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, Banknote, FileText, Plus, Scale, Trash2, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Banknote, FileText, Plus, Scale, Trash2, Undo2, Wallet } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { Badge, Bar, Card, Empty, PageHeader, StatCard, Table, Td, Th, fullDate, num, payMethodLabel, sar } from "@/lib/ui";
-import { ConfirmButton } from "@/components/dialog";
+import { ConfirmButton, Dialog } from "@/components/dialog";
+import { Field, Input, Submit } from "@/components/form";
+import { AccountingTabs } from "./tabs";
+import { issueCreditNote } from "./actions";
 import { addExpense, payInvoice } from "../actions";
 import { deleteExpense } from "../manage-actions";
 
@@ -57,7 +60,8 @@ export default async function AccountingPage() {
 
   return (
     <>
-      <PageHeader title="المحاسبة" subtitle="الفواتير الضريبية، المدفوعات، والمصروفات" />
+      <PageHeader title="المحاسبة" subtitle="الفواتير، القيود، والقوائم المالية" />
+      <AccountingTabs active="/app/accounting" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard
@@ -133,8 +137,31 @@ export default async function AccountingPage() {
                     {inv.payments[0] ? payMethodLabel[inv.payments[0].method] : "—"}
                   </Td>
                   <Td>
-                    {inv.status === "paid" ? (
-                      <Badge tone="emerald">مدفوعة</Badge>
+                    {inv.status === "refunded" ? (
+                      <Badge tone="slate">مسترجعة</Badge>
+                    ) : inv.status === "paid" ? (
+                      <div className="flex items-center gap-1.5">
+                        <Badge tone="emerald">مدفوعة</Badge>
+                        <Dialog
+                          label="إشعار دائن"
+                          title={`إشعار دائن على ${inv.number}`}
+                          description="مستند إلزامي من الهيئة لأي استرجاع"
+                          variant="icon"
+                          icon={<Undo2 className="w-4 h-4" />}
+                        >
+                          <form action={issueCreditNote} className="space-y-3">
+                            <input type="hidden" name="invoiceId" value={inv.id} />
+                            <div className="rounded-xl bg-amber-50 ring-1 ring-amber-100 px-4 py-3 text-sm text-amber-800">
+                              سيُصدر إشعار دائن بمبلغ {sar(inv.totalSAR)} ويُعكس القيد المحاسبي
+                              وتُخصم الضريبة من الإقرار.
+                            </div>
+                            <Field label="السبب">
+                              <Input name="reason" placeholder="استرجاع، إلغاء اشتراك، خطأ في الفاتورة" />
+                            </Field>
+                            <Submit tone="red">إصدار الإشعار الدائن</Submit>
+                          </form>
+                        </Dialog>
+                      </div>
                     ) : (
                       <form action={payInvoice} className="flex items-center gap-1.5">
                         <input type="hidden" name="invoiceId" value={inv.id} />

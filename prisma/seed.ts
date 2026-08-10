@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/auth";
 import { issueInvoice } from "../src/lib/invoicing";
+import { ensureChart, postExpense } from "../src/lib/ledger";
 
 const db = new PrismaClient();
 
@@ -59,6 +60,8 @@ async function buildClub(opts: {
       platformEndsAt: shift(opts.status === "trial" ? 9 : 21),
     },
   });
+
+  await ensureChart(club.id);
 
   // فواتير اشتراك النادي في المنصة (إيرادنا)
   for (let m = 5; m >= 0; m--) {
@@ -298,9 +301,10 @@ async function buildClub(opts: {
       const d = new Date();
       d.setMonth(d.getMonth() - m);
       d.setDate(3 + expenseDefs.indexOf(e) * 4);
-      await db.expense.create({
+      const created = await db.expense.create({
         data: { ...e, clubId: club.id, spentAt: d, amountSAR: e.amountSAR * (1 + m * 0.02) },
       });
+      await postExpense(created.id);
     }
   }
 

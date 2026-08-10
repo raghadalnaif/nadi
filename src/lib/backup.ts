@@ -57,17 +57,25 @@ export async function buildSnapshot(clubId: string) {
   };
 }
 
-// يحفظ النسخة على القرص ويحدّث تاريخ آخر نسخة
+// يحفظ النسخة على القرص ويحدّث تاريخ آخر نسخة.
+// على الاستضافة السحابية القرص للقراءة فقط — نسجّل التاريخ ويبقى
+// التنزيل المباشر متاحاً من زر «تنزيل».
 export async function runBackup(clubId: string) {
   const snapshot = await buildSnapshot(clubId);
-  await mkdir(BACKUP_DIR, { recursive: true });
+  let file: string | null = null;
 
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const file = path.join(BACKUP_DIR, `${snapshot.club?.slug ?? clubId}-${stamp}.json`);
-  await writeFile(file, JSON.stringify(snapshot, null, 2), "utf8");
+  try {
+    await mkdir(BACKUP_DIR, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const full = path.join(BACKUP_DIR, `${snapshot.club?.slug ?? clubId}-${stamp}.json`);
+    await writeFile(full, JSON.stringify(snapshot, null, 2), "utf8");
+    file = path.basename(full);
+  } catch {
+    file = null; // بيئة بقرص غير قابل للكتابة
+  }
 
   await db.club.update({ where: { id: clubId }, data: { lastBackupAt: new Date() } });
-  return { file: path.basename(file), counts: snapshot.meta.counts };
+  return { file, counts: snapshot.meta.counts, storedOnDisk: file !== null };
 }
 
 // قائمة النسخ المحفوظة لهذا النادي

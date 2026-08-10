@@ -44,6 +44,8 @@ model Club {
   employees        Employee[]
   offers           Offer[]
   apiKeys          ApiKey[]
+  accounts         Account[]
+  journalEntries   JournalEntry[]
   platformInvoices PlatformInvoice[]
 }
 
@@ -242,7 +244,57 @@ model Booking {
   @@index([sessionId, status])
 }
 
-// ───────── المحاسبة ─────────
+// ───────── المحاسبة: دليل الحسابات والقيد المزدوج ─────────
+
+model Account {
+  id     String  @id @default(cuid())
+  clubId String
+  club   Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  code   String // 1010, 4010 …
+  name   String
+  type   String // asset | liability | equity | revenue | expense
+  isCash Boolean @default(false) // حسابات النقد والبنك
+  active Boolean @default(true)
+
+  lines JournalLine[]
+
+  @@unique([clubId, code])
+  @@index([clubId, type])
+}
+
+// قيد اليومية — مجموع المدين = مجموع الدائن دائماً
+model JournalEntry {
+  id        String   @id @default(cuid())
+  clubId    String
+  club      Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  number    Int // تسلسلي داخل النادي
+  date      DateTime
+  memo      String
+  source    String // invoice | payment | expense | payroll | credit_note | manual
+  refId     String? // معرّف المستند المصدر
+  createdBy String?
+  createdAt DateTime @default(now())
+
+  lines JournalLine[]
+
+  @@unique([clubId, number])
+  @@index([clubId, date])
+}
+
+model JournalLine {
+  id        String       @id @default(cuid())
+  entryId   String
+  entry     JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId String
+  account   Account      @relation(fields: [accountId], references: [id])
+  debitSAR  Float        @default(0)
+  creditSAR Float        @default(0)
+  memo      String?
+
+  @@index([accountId])
+}
+
+// ───────── الفواتير ─────────
 
 model Invoice {
   id             String   @id @default(cuid())
@@ -262,6 +314,8 @@ model Invoice {
   qrTLV          String? // رمز QR بصيغة ZATCA (TLV/Base64)
 
   // متطلبات الفوترة الإلكترونية — هيئة الزكاة والضريبة والدخل
+  docType     String  @default("invoice") // invoice = فاتورة | credit_note = إشعار دائن
+  refInvoiceId String? // الفاتورة الأصلية عند الإشعار الدائن
   invoiceType String  @default("simplified") // simplified = مبسطة (B2C) | standard = ضريبية (B2B)
   buyerName   String? // إلزامي في الفاتورة الضريبية B2B
   buyerVat    String? // الرقم الضريبي للمشتري
