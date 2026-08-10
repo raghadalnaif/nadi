@@ -1,0 +1,122 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// النادي (Tenant) — كل البيانات مربوطة به تمهيداً للتحول لـ SaaS
+model Club {
+  id        String   @id @default(cuid())
+  name      String
+  phone     String?
+  createdAt DateTime @default(now())
+
+  members  Member[]
+  plans    Plan[]
+  classes  GymClass[]
+}
+
+model Member {
+  id         String   @id @default(cuid())
+  clubId     String
+  club       Club     @relation(fields: [clubId], references: [id])
+  name       String
+  phone      String
+  memberNo   Int
+  gender     String   @default("male")
+  createdAt  DateTime @default(now())
+
+  subscriptions Subscription[]
+  attendance    Attendance[]
+  bookings      Booking[]
+
+  @@unique([clubId, memberNo])
+  @@index([clubId, name])
+  @@index([clubId, phone])
+}
+
+// خطة اشتراك (شهري، 3 شهور، سنوي...)
+model Plan {
+  id           String  @id @default(cuid())
+  clubId       String
+  club         Club    @relation(fields: [clubId], references: [id])
+  name         String
+  durationDays Int
+  priceSAR     Float
+  active       Boolean @default(true)
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id        String   @id @default(cuid())
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id])
+  planId    String
+  plan      Plan     @relation(fields: [planId], references: [id])
+  startsAt  DateTime
+  endsAt    DateTime
+  paidSAR   Float
+  // active | frozen | cancelled — الانتهاء يُحسب من endsAt
+  status    String   @default("active")
+  frozenAt  DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([memberId, endsAt])
+}
+
+model Attendance {
+  id        String   @id @default(cuid())
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id])
+  checkedAt DateTime @default(now())
+  // reception | fingerprint | wristband | gate
+  source    String   @default("reception")
+
+  @@index([memberId, checkedAt])
+}
+
+// تعريف الحصة (كروس فت، يوغا...)
+model GymClass {
+  id          String @id @default(cuid())
+  clubId      String
+  club        Club   @relation(fields: [clubId], references: [id])
+  name        String
+  coach       String
+  durationMin Int
+  capacity    Int
+
+  sessions ClassSession[]
+}
+
+// جلسة فعلية بتاريخ ووقت — مصدر الحقيقة الوحيد للسعة
+model ClassSession {
+  id       String   @id @default(cuid())
+  classId  String
+  gymClass GymClass @relation(fields: [classId], references: [id])
+  startsAt DateTime
+  capacity Int
+
+  bookings Booking[]
+
+  @@index([classId, startsAt])
+}
+
+model Booking {
+  id        String       @id @default(cuid())
+  sessionId String
+  session   ClassSession @relation(fields: [sessionId], references: [id])
+  memberId  String
+  member    Member       @relation(fields: [memberId], references: [id])
+  // booked | waitlist | cancelled | attended
+  status    String       @default("booked")
+  // app | reception | urpass | partner — منه نعرف مصدر كل عميل
+  source    String       @default("reception")
+  createdAt DateTime     @default(now())
+
+  @@unique([sessionId, memberId])
+  @@index([sessionId, status])
+}

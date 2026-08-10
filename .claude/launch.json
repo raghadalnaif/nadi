@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nadi-dev",
+      "runtimeExecutable": "/Users/raghadalnaif/.local/node/bin/npm",
+      "runtimeArgs": ["run", "dev"],
+      "cwd": "/Users/raghadalnaif/Desktop/nadi",
+      "port": 3000
+    }
+  ]
+}
