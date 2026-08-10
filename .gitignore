@@ -48,3 +48,6 @@ prisma/dev.db-journal
 *[0-9].tsx
 *[0-9].css
 *[0-9].ts
+
+# النسخ الاحتياطية المحلية
+/backups

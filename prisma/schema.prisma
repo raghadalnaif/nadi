@@ -26,6 +26,15 @@ model Club {
   platformStatus  String   @default("active") // active | trial | suspended
   platformEndsAt  DateTime
 
+  // طرق التحضير — المدير يفعّل ما يناسب ناديه
+  checkinManual      Boolean @default(true)
+  checkinBarcode     Boolean @default(true)
+  checkinFingerprint Boolean @default(false)
+  checkinWristband   Boolean @default(false)
+  checkinGate        Boolean @default(false)
+  blockExpiredEntry  Boolean @default(true)
+  lastBackupAt       DateTime?
+
   users            User[]
   members          Member[]
   plans            Plan[]
@@ -33,6 +42,7 @@ model Club {
   invoices         Invoice[]
   expenses         Expense[]
   employees        Employee[]
+  offers           Offer[]
   platformInvoices PlatformInvoice[]
 }
 
@@ -91,6 +101,7 @@ model Member {
   phone     String
   memberNo  Int
   gender    String   @default("male")
+  barcode   String?  @unique
   notes     String?
   createdAt DateTime @default(now())
 
@@ -124,8 +135,11 @@ model Subscription {
   plan       Plan      @relation(fields: [planId], references: [id])
   startsAt   DateTime
   endsAt     DateTime
-  paidSAR    Float
-  status     String    @default("active") // active | frozen | cancelled
+  paidSAR     Float
+  discountSAR Float     @default(0)
+  offerId     String?
+  offer       Offer?    @relation(fields: [offerId], references: [id])
+  status      String    @default("active") // active | frozen | cancelled
   frozenAt   DateTime?
   frozenDays Int       @default(0)
   source     String    @default("reception") // reception | app | urpass
@@ -144,6 +158,30 @@ model Attendance {
   source    String   @default("reception") // reception | fingerprint | wristband | gate
 
   @@index([memberId, checkedAt])
+}
+
+// ───────── العروض والخصومات ─────────
+
+model Offer {
+  id        String   @id @default(cuid())
+  clubId    String
+  club      Club     @relation(fields: [clubId], references: [id])
+  name      String
+  code      String
+  kind      String   @default("percent") // percent = نسبة | fixed = مبلغ ثابت
+  value     Float
+  startsAt  DateTime
+  endsAt    DateTime
+  maxUses   Int      @default(0) // 0 = بلا حد
+  usedCount Int      @default(0)
+  active    Boolean  @default(true)
+  planId    String? // null = يشمل كل الباقات
+  createdAt DateTime @default(now())
+
+  subscriptions Subscription[]
+
+  @@unique([clubId, code])
+  @@index([clubId, active])
 }
 
 // ───────── الحصص والحجوزات ─────────
@@ -263,6 +301,7 @@ model Employee {
   salarySAR  Float
   phone      String
   iban       String?
+  barcode    String?  @unique
   hireDate   DateTime
   status     String   @default("active") // active | on_leave | terminated
 

@@ -23,9 +23,11 @@ async function reset() {
   await db.gymClass.deleteMany();
   await db.attendance.deleteMany();
   await db.subscription.deleteMany();
+  await db.offer.deleteMany();
   await db.plan.deleteMany();
   await db.member.deleteMany();
   await db.platformInvoice.deleteMany();
+  await db.auditLog.deleteMany();
   await db.user.deleteMany();
   await db.club.deleteMany();
 }
@@ -40,6 +42,9 @@ async function buildClub(opts: {
   memberCount: number;
   staffEmails: boolean;
 }) {
+  // المصروفات والرواتب متناسبة مع حجم النادي حتى تكون التقارير واقعية
+  const scale = opts.memberCount / 120;
+
   const club = await db.club.create({
     data: {
       name: opts.name,
@@ -80,6 +85,15 @@ async function buildClub(opts: {
     ].map((p) => db.plan.create({ data: { ...p, clubId: club.id } }))
   );
 
+  // عروض وخصومات تجريبية
+  await db.offer.createMany({
+    data: [
+      { clubId: club.id, name: "عرض الصيف", code: "SUMMER25", kind: "percent", value: 25, startsAt: shift(-10), endsAt: shift(20), maxUses: 50 },
+      { clubId: club.id, name: "خصم الطلاب", code: "STUDENT", kind: "percent", value: 15, startsAt: shift(-60), endsAt: shift(120), maxUses: 0 },
+      { clubId: club.id, name: "خصم 100 ريال", code: "SAVE100", kind: "fixed", value: 100, startsAt: shift(-5), endsAt: shift(10), maxUses: 20 },
+    ],
+  });
+
   const firstNames = ["محمد", "عبدالله", "فهد", "سلطان", "خالد", "ناصر", "سعود", "تركي", "بندر", "ماجد", "عمر", "ياسر", "راكان", "فيصل", "زياد"];
   const lastNames = ["العتيبي", "القحطاني", "الشهري", "الدوسري", "الغامدي", "الحربي", "المطيري", "الزهراني", "العنزي", "السبيعي"];
   const daysLeftPool = [45, 3, -8, 60, 12, 200, -2, 30, 1, 25, -15, 90, 6, 120, -30, 150, 5, 75, -1, 40];
@@ -95,16 +109,18 @@ async function buildClub(opts: {
         name: `${pick(firstNames, i)} ${pick(lastNames, Math.floor(i / 3) + i)}`,
         phone: `05${String(50000000 + i * 137 + opts.memberCount).slice(0, 8)}`,
         memberNo: ++memberNo,
+        barcode: `M${memberNo}${opts.slug.slice(0, 2).toUpperCase()}${i}`,
         gender: i % 5 === 0 ? "female" : "male",
       },
     });
     members.push(member);
 
+    const subStart = shift(daysLeft - plan.durationDays);
     const sub = await db.subscription.create({
       data: {
         memberId: member.id,
         planId: plan.id,
-        startsAt: shift(daysLeft - plan.durationDays),
+        startsAt: subStart,
         endsAt: shift(daysLeft),
         paidSAR: plan.priceSAR,
         status: i % 11 === 0 ? "frozen" : "active",
@@ -121,12 +137,28 @@ async function buildClub(opts: {
       items: [{ description: `اشتراك ${plan.name}`, totalWithVat: plan.priceSAR }],
       status: i % 9 === 0 ? "unpaid" : "paid",
       method: pick(["cash", "mada", "visa", "tabby", "tamara", "transfer"], i),
+      issuedAt: subStart > new Date() ? new Date() : subStart,
     });
+
+    // تجديدات سابقة — تعكس دورة حياة العضو وتوزّع الإيراد على الأشهر
+    for (let past = 1; past <= 5; past++) {
+      if ((i + past) % 2 !== 0) continue; // ليس كل عضو يجدد كل شهر
+      const when = new Date();
+      when.setMonth(when.getMonth() - past);
+      when.setDate(1 + ((i * 7 + past * 3) % 26));
+      await issueInvoice({
+        clubId: club.id,
+        memberId: member.id,
+        items: [{ description: `تجديد اشتراك ${plan.name}`, totalWithVat: plan.priceSAR }],
+        method: pick(["cash", "mada", "visa", "tabby", "tamara"], i + past),
+        issuedAt: when,
+      });
+    }
 
     // حضور خلال آخر أسبوعين
     if (daysLeft > 0) {
       for (let d = 0; d < 14; d++) {
-        if ((i + d) % 3 !== 0) continue;
+        if ((i + d) % 4 !== 0) continue;
         const at = shift(-d);
         at.setHours(7 + ((i + d) % 14), 30, 0, 0);
         await db.attendance.create({
@@ -185,14 +217,16 @@ async function buildClub(opts: {
     { name: "علي الرشيد", jobTitle: "فني صيانة", department: "صيانة", salarySAR: 4200 },
   ];
 
-  for (let i = 0; i < staffDefs.length; i++) {
-    const s = staffDefs[i];
+  const staffCount = opts.memberCount >= 100 ? staffDefs.length : opts.memberCount >= 50 ? 5 : 3;
+  for (let i = 0; i < staffCount; i++) {
+    const s = { ...staffDefs[i], salarySAR: Math.round(staffDefs[i].salarySAR * Math.min(1, 0.6 + scale * 0.4)) };
     const emp = await db.employee.create({
       data: {
         ...s,
         clubId: club.id,
         phone: `05${String(66000000 + i * 971).slice(0, 8)}`,
         iban: `SA${String(4400000000000000000000 + i)}`.slice(0, 24),
+        barcode: `E${opts.slug.slice(0, 3).toUpperCase()}${i}`,
         hireDate: shift(-400 - i * 90),
         status: i === 6 ? "on_leave" : "active",
       },
@@ -230,7 +264,7 @@ async function buildClub(opts: {
       });
     }
 
-    for (let d = 0; d < 7; d++) {
+    for (let d = 1; d < 7; d++) {
       const dayDate = shift(-d);
       dayDate.setHours(0, 0, 0, 0);
       const checkIn = new Date(dayDate);
@@ -252,14 +286,14 @@ async function buildClub(opts: {
 
   // المصروفات
   const expenseDefs = [
-    { category: "إيجار", description: "إيجار المقر الشهري", amountSAR: 25000 },
-    { category: "رواتب", description: "رواتب الموظفين", amountSAR: 50700 },
-    { category: "مرافق", description: "فاتورة كهرباء ومياه", amountSAR: 6800 },
-    { category: "صيانة", description: "صيانة أجهزة رياضية", amountSAR: 3400 },
-    { category: "تسويق", description: "حملة إعلانية سناب شات", amountSAR: 9000 },
-    { category: "أخرى", description: "مستلزمات نظافة", amountSAR: 1200 },
+    { category: "إيجار", description: "إيجار المقر الشهري", amountSAR: Math.round(14000 * scale) },
+    { category: "رواتب", description: "رواتب الموظفين", amountSAR: Math.round(22000 * scale) },
+    { category: "مرافق", description: "فاتورة كهرباء ومياه", amountSAR: Math.round(3800 * scale) },
+    { category: "صيانة", description: "صيانة أجهزة رياضية", amountSAR: Math.round(1800 * scale) },
+    { category: "تسويق", description: "حملة إعلانية", amountSAR: Math.round(2600 * scale) },
+    { category: "أخرى", description: "مستلزمات نظافة", amountSAR: Math.round(800 * scale) },
   ];
-  for (let m = 3; m >= 0; m--) {
+  for (let m = 5; m >= 0; m--) {
     for (const e of expenseDefs) {
       const d = new Date();
       d.setMonth(d.getMonth() - m);
@@ -279,15 +313,15 @@ async function main() {
 
   const clubA = await buildClub({
     name: "نادي اللياقة الأول", slug: "fitness-one", vat: "300012345600003",
-    plan: "pro", fee: 599, status: "active", memberCount: 20, staffEmails: true,
+    plan: "pro", fee: 599, status: "active", memberCount: 120, staffEmails: true,
   });
   const clubB = await buildClub({
     name: "نادي القوة الرياضي", slug: "power-gym", vat: "300098765400003",
-    plan: "basic", fee: 299, status: "active", memberCount: 12, staffEmails: false,
+    plan: "basic", fee: 299, status: "active", memberCount: 55, staffEmails: false,
   });
   const clubC = await buildClub({
     name: "أكاديمية النخبة", slug: "elite-academy", vat: "300055566600003",
-    plan: "enterprise", fee: 1299, status: "trial", memberCount: 8, staffEmails: false,
+    plan: "enterprise", fee: 1299, status: "trial", memberCount: 28, staffEmails: false,
   });
 
   // مزود الحل (أنت)

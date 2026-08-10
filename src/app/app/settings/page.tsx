@@ -1,4 +1,4 @@
-import { Building2, KeyRound, Pencil, Power, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { Building2, DatabaseBackup, Download, Fingerprint, KeyRound, Pencil, Power, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { db } from "@/lib/db";
 import { MODULE_ACCESS, ROLES, requireModule, type Role } from "@/lib/auth";
 import { ACTION_LABEL } from "@/lib/audit";
@@ -13,13 +13,26 @@ import {
   toggleUser,
   updateUser,
 } from "../manage-actions";
+import { saveCheckinSettings, takeBackup } from "../ops-actions";
+import { listBackups } from "@/lib/backup";
+
+const CHECKIN_METHODS = [
+  { key: "checkinManual", label: "تحضير يدوي من الاستقبال", hint: "الموظف يبحث ويضغط تحضير" },
+  { key: "checkinBarcode", label: "باركود / بطاقة عضوية", hint: "مسح ضوئي سريع أو رقم العضوية" },
+  { key: "checkinFingerprint", label: "بصمة", hint: "يتطلب جهاز بصمة مربوط بالشبكة" },
+  { key: "checkinWristband", label: "أساور ذكية", hint: "أساور RFID للأعضاء" },
+  { key: "checkinGate", label: "بوابة دخول", hint: "بوابة إلكترونية عند المدخل" },
+] as const;
 
 const MODULE_LABELS: Record<string, string> = {
   dashboard: "لوحة الإدارة",
   reception: "الاستقبال",
   subscriptions: "الاشتراكات",
   schedule: "الحصص",
+  offers: "العروض والخصومات",
+  invoices: "الفواتير الضريبية",
   accounting: "المحاسبة",
+  reports: "التقارير",
   hr: "الموارد البشرية",
   settings: "الإعدادات",
 };
@@ -46,6 +59,9 @@ export default async function SettingsPage() {
     db.auditLog.findMany({ where: { clubId }, orderBy: { at: "desc" }, take: 10 }),
   ]);
   if (!club) return null;
+
+  const backups = await listBackups(club.slug);
+  const settings = club as unknown as Record<string, boolean>;
 
   return (
     <>
@@ -131,6 +147,97 @@ export default async function SettingsPage() {
           </p>
           <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100">
             لتغيير الباقة أو التمديد، تواصل مع مزود الخدمة
+          </p>
+        </Card>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-5 items-start mt-5">
+        <Card
+          title="طرق التحضير"
+          className="p-5 pt-4"
+          action={<span className="text-xs text-slate-400 flex items-center gap-1.5"><Fingerprint className="w-3.5 h-3.5" />فعّل ما يناسب ناديك</span>}
+        >
+          <form action={saveCheckinSettings} className="space-y-3">
+            {CHECKIN_METHODS.map((m) => (
+              <label
+                key={m.key}
+                className="flex items-start gap-3 rounded-xl border border-slate-200 px-4 py-3 cursor-pointer hover:border-emerald-300 hover:bg-emerald-50/30 transition"
+              >
+                <input
+                  type="checkbox"
+                  name={m.key}
+                  defaultChecked={settings[m.key]}
+                  className="mt-0.5 w-4 h-4 accent-emerald-600"
+                />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-bold text-slate-800">{m.label}</span>
+                  <span className="block text-xs text-slate-400 mt-0.5">{m.hint}</span>
+                </span>
+              </label>
+            ))}
+
+            <label className="flex items-start gap-3 rounded-xl bg-amber-50 ring-1 ring-amber-100 px-4 py-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="blockExpiredEntry"
+                defaultChecked={club.blockExpiredEntry}
+                className="mt-0.5 w-4 h-4 accent-amber-600"
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-bold text-amber-900">منع دخول منتهي الاشتراك</span>
+                <span className="block text-xs text-amber-700 mt-0.5">
+                  يرفض التحضير تلقائياً ويطالب بالتجديد
+                </span>
+              </span>
+            </label>
+
+            <Submit>حفظ الإعدادات</Submit>
+          </form>
+        </Card>
+
+        <Card
+          title="النسخ الاحتياطي"
+          className="p-5 pt-4"
+          action={<span className="text-xs text-slate-400 flex items-center gap-1.5"><DatabaseBackup className="w-3.5 h-3.5" />حماية بياناتك</span>}
+        >
+          <div className="rounded-xl bg-slate-50 px-4 py-3 mb-4">
+            <p className="text-sm text-slate-600">
+              آخر نسخة:{" "}
+              <b className="text-slate-800">
+                {club.lastBackupAt ? fullDate(club.lastBackupAt) : "لم تُؤخذ نسخة بعد"}
+              </b>
+            </p>
+          </div>
+
+          <div className="flex gap-2 mb-4">
+            <form action={takeBackup} className="flex-1">
+              <Submit>أخذ نسخة الآن</Submit>
+            </form>
+            <a
+              href="/app/settings/backup"
+              className="h-11 px-4 rounded-xl border border-slate-200 text-sm text-slate-600 flex items-center gap-1.5 hover:bg-slate-50 transition whitespace-nowrap"
+            >
+              <Download className="w-4 h-4" />
+              تنزيل
+            </a>
+          </div>
+
+          {backups.length > 0 && (
+            <ul className="divide-y divide-slate-50 border-t border-slate-100 pt-1">
+              {backups.slice(0, 5).map((b) => (
+                <li key={b.name} className="flex items-center justify-between gap-3 py-2.5 text-xs">
+                  <span className="text-slate-500 truncate">{fullDate(b.at)}</span>
+                  <span className="text-slate-400 tabular-nums shrink-0">
+                    {Math.round(b.size / 1024)} كيلوبايت
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100 leading-relaxed">
+            النسخة تشمل كل بيانات النادي: الأعضاء، الاشتراكات، الفواتير، الموظفون، والمصروفات.
+            عند النشر على خادم سحابي يُفعَّل النسخ التلقائي اليومي إضافةً لهذا.
           </p>
         </Card>
       </div>

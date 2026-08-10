@@ -13,6 +13,7 @@ export async function issueInvoice(input: {
   buyerVat?: string | null;
   status?: "paid" | "unpaid";
   method?: string;
+  issuedAt?: Date; // للبيانات التاريخية — الافتراضي الآن
 }) {
   const club = await db.club.findUnique({ where: { id: input.clubId } });
   if (!club) throw new Error("النادي غير موجود");
@@ -46,7 +47,7 @@ export async function issueInvoice(input: {
   const totalSAR = Math.round(lines.reduce((s, l) => s + l.total, 0) * 100) / 100;
 
   const uuid = crypto.randomUUID();
-  const issuedAt = new Date();
+  const issuedAt = input.issuedAt ?? new Date();
   const invoiceType = input.invoiceType ?? "simplified";
 
   const { xml, hash, qrTLV } = sealInvoice({

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { Badge, Card, Empty, PageHeader, StatCard, num, sar, subStatus, time } from "@/lib/ui";
 import { checkIn, renew } from "../actions";
+import { Scanner } from "./scanner";
 
 export default async function ReceptionPage({ searchParams }: PageProps<"/app/reception">) {
   const user = await requireModule("reception");
@@ -12,6 +13,14 @@ export default async function ReceptionPage({ searchParams }: PageProps<"/app/re
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
+
+  const club = await db.club.findUnique({ where: { id: clubId } });
+  const methods = [
+    club?.checkinBarcode && "barcode",
+    club?.checkinFingerprint && "fingerprint",
+    club?.checkinWristband && "wristband",
+    club?.checkinGate && "gate",
+  ].filter(Boolean) as string[];
 
   const [attendanceToday, activeCount, todayRevenue, members, recentCheckins] = await Promise.all([
     db.attendance.count({ where: { checkedAt: { gte: todayStart }, member: { clubId } } }),
@@ -52,6 +61,8 @@ export default async function ReceptionPage({ searchParams }: PageProps<"/app/re
 
       <div className="grid lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2">
+          <Scanner methods={methods} />
+
           <form className="relative mb-4">
             <Search className="w-4 h-4 text-slate-400 absolute right-4 top-1/2 -translate-y-1/2" />
             <input

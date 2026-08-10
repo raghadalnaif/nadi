@@ -193,11 +193,20 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/ap
                     ))}
                 </select>
               </div>
+              <div>
+                <label className="block text-sm text-slate-600 mb-1.5">كود الخصم (اختياري)</label>
+                <input
+                  name="offerCode"
+                  dir="ltr"
+                  placeholder="SUMMER25"
+                  className="w-full h-11 bg-white border border-slate-200 rounded-xl px-3.5 text-sm text-right uppercase outline-none focus:border-emerald-400 focus:ring-4 focus:ring-emerald-500/10"
+                />
+              </div>
               <button className="w-full h-11 rounded-xl bg-emerald-600 text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-[0.99] transition">
                 <UserPlus className="w-4 h-4" />
                 تسجيل وإصدار فاتورة
               </button>
-              <p className="text-xs text-slate-400 text-center">تُصدر فاتورة ضريبية تلقائياً عند التسجيل</p>
+              <p className="text-xs text-slate-400 text-center">تُصدر فاتورة ضريبية وباركود عضوية تلقائياً</p>
             </form>
           </Card>
 

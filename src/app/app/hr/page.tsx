@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarOff, CalendarPlus, Check, CircleDollarSign, Pencil, Plus, Trash2, UserPlus, Users, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarOff, CalendarPlus, Check, CircleDollarSign, LogIn, LogOut, Pencil, Plus, Trash2, UserPlus, UserX, Users, X } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { Badge, Card, Empty, PageHeader, StatCard, Table, Td, Th, fullDate, num, sar } from "@/lib/ui";
@@ -6,9 +6,11 @@ import { ConfirmButton, Dialog } from "@/components/dialog";
 import { Field, Input, Select, Submit } from "@/components/form";
 import { decideLeave, payPayroll } from "../actions";
 import { addLeave, deleteEmployee, generatePayroll, saveEmployee } from "../manage-actions";
+import { markStaffAbsent, staffCheckIn, staffCheckOut } from "../ops-actions";
 
 const departments = ["إدارة", "تدريب", "استقبال", "محاسبة", "صيانة"];
 
+const hhmm = new Intl.DateTimeFormat("ar-SA", { hour: "numeric", minute: "2-digit" });
 const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
 export default async function HrPage() {
@@ -315,37 +317,83 @@ export default async function HrPage() {
       </div>
 
       <Card title="حضور الموظفين اليوم" className="mt-5">
-        {todayShifts.length === 0 ? (
-          <Empty text="لا يوجد سجل حضور اليوم" />
-        ) : (
-          <Table
-            head={
-              <>
-                <Th>الموظف</Th>
-                <Th>الدخول</Th>
-                <Th>الخروج</Th>
-                <Th>الحالة</Th>
-              </>
-            }
-          >
-            {todayShifts.map((s) => (
-              <tr key={s.id} className="hover:bg-slate-50/60 transition">
-                <Td className="font-bold">{s.employee.name}</Td>
+        <Table
+          head={
+            <>
+              <Th>الموظف</Th>
+              <Th>الدخول</Th>
+              <Th>الخروج</Th>
+              <Th>ساعات العمل</Th>
+              <Th>الحالة</Th>
+              <Th>تسجيل</Th>
+            </>
+          }
+        >
+          {employees.map((e) => {
+            const shift = todayShifts.find((s) => s.employeeId === e.id);
+            const hours =
+              shift?.checkIn && shift?.checkOut
+                ? (shift.checkOut.getTime() - shift.checkIn.getTime()) / 3600000
+                : null;
+
+            return (
+              <tr key={e.id} className="hover:bg-slate-50/60 transition">
+                <Td className="font-bold">{e.name}</Td>
                 <Td className="text-slate-600 tabular-nums">
-                  {s.checkIn ? new Intl.DateTimeFormat("ar-SA", { hour: "numeric", minute: "2-digit" }).format(s.checkIn) : "—"}
+                  {shift?.checkIn ? hhmm.format(shift.checkIn) : "—"}
                 </Td>
                 <Td className="text-slate-600 tabular-nums">
-                  {s.checkOut ? new Intl.DateTimeFormat("ar-SA", { hour: "numeric", minute: "2-digit" }).format(s.checkOut) : "—"}
+                  {shift?.checkOut ? hhmm.format(shift.checkOut) : "—"}
+                </Td>
+                <Td className="text-slate-600 tabular-nums whitespace-nowrap">
+                  {hours !== null ? `${hours.toFixed(1)} ساعة` : "—"}
                 </Td>
                 <Td>
-                  <Badge tone={s.status === "present" ? "emerald" : "red"}>
-                    {s.status === "present" ? "حاضر" : "غائب"}
+                  <Badge
+                    tone={
+                      shift?.status === "present" ? "emerald" : shift?.status === "absent" ? "red" : "slate"
+                    }
+                  >
+                    {shift?.status === "present" ? "حاضر" : shift?.status === "absent" ? "غائب" : "لم يسجّل"}
                   </Badge>
                 </Td>
+                <Td>
+                  <div className="flex items-center gap-1">
+                    {!shift?.checkIn && (
+                      <form action={staffCheckIn}>
+                        <input type="hidden" name="employeeId" value={e.id} />
+                        <button className="h-8 px-3 rounded-lg bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 hover:bg-emerald-700 transition whitespace-nowrap">
+                          <LogIn className="w-3.5 h-3.5" />
+                          دخول
+                        </button>
+                      </form>
+                    )}
+                    {shift?.checkIn && !shift?.checkOut && (
+                      <form action={staffCheckOut}>
+                        <input type="hidden" name="employeeId" value={e.id} />
+                        <button className="h-8 px-3 rounded-lg border border-slate-200 text-slate-600 text-xs font-bold flex items-center gap-1.5 hover:bg-slate-50 transition whitespace-nowrap">
+                          <LogOut className="w-3.5 h-3.5" />
+                          خروج
+                        </button>
+                      </form>
+                    )}
+                    {shift?.status !== "absent" && (
+                      <form action={markStaffAbsent}>
+                        <input type="hidden" name="employeeId" value={e.id} />
+                        <ConfirmButton
+                          label="تسجيل غياب"
+                          message={`تسجيل غياب ${e.name} اليوم؟`}
+                          icon={<UserX className="w-4 h-4" />}
+                        />
+                      </form>
+                    )}
+                  </div>
+                </Td>
               </tr>
-            ))}
-          </Table>
-        )}
+            );
+          })}
+        </Table>
+        {employees.length === 0 && <Empty text="لا يوجد موظفون" />}
       </Card>
     </>
   );

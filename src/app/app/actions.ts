@@ -10,6 +10,36 @@ async function memberOfMyClub(memberId: string, clubId: string) {
   return db.member.findFirst({ where: { id: memberId, clubId } });
 }
 
+// يتحقق من كود العرض ويحسب السعر بعد الخصم
+async function applyOffer(clubId: string, planId: string, price: number, code: string) {
+  if (!code) return { finalPrice: price, discountSAR: 0, offer: null };
+
+  const now = new Date();
+  const offer = await db.offer.findFirst({
+    where: {
+      clubId,
+      code,
+      active: true,
+      startsAt: { lte: now },
+      endsAt: { gte: now },
+      OR: [{ planId: null }, { planId }],
+    },
+  });
+
+  // كود غير صالح أو منتهٍ أو استُنفد → السعر كامل بلا خصم
+  if (!offer) return { finalPrice: price, discountSAR: 0, offer: null };
+  if (offer.maxUses > 0 && offer.usedCount >= offer.maxUses) {
+    return { finalPrice: price, discountSAR: 0, offer: null };
+  }
+
+  const raw = offer.kind === "percent" ? (price * offer.value) / 100 : offer.value;
+  const discountSAR = Math.min(price, Math.round(raw * 100) / 100);
+
+  await db.offer.update({ where: { id: offer.id }, data: { usedCount: { increment: 1 } } });
+
+  return { finalPrice: Math.round((price - discountSAR) * 100) / 100, discountSAR, offer };
+}
+
 export async function checkIn(formData: FormData) {
   const user = await requireModule("reception");
   const memberId = String(formData.get("memberId"));
@@ -97,32 +127,56 @@ export async function addMember(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   const phone = String(formData.get("phone") ?? "").trim();
   const planId = String(formData.get("planId") ?? "");
+  const offerCode = String(formData.get("offerCode") ?? "").trim().toUpperCase();
   if (!name || !phone || !planId) return;
 
   const club = await db.club.findUnique({ where: { id: user.clubId! } });
   const plan = await db.plan.findFirst({ where: { id: planId, clubId: user.clubId! } });
   if (!club || !plan) return;
 
+  const { finalPrice, discountSAR, offer } = await applyOffer(club.id, plan.id, plan.priceSAR, offerCode);
+
   const last = await db.member.findFirst({
     where: { clubId: club.id },
     orderBy: { memberNo: "desc" },
   });
 
+  const memberNo = (last?.memberNo ?? 1000) + 1;
   const member = await db.member.create({
-    data: { clubId: club.id, name, phone, memberNo: (last?.memberNo ?? 1000) + 1 },
+    data: {
+      clubId: club.id,
+      name,
+      phone,
+      memberNo,
+      // باركود العضوية يُولَّد تلقائياً للمسح الضوئي
+      barcode: `M${memberNo}${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
+    },
   });
 
   const endsAt = new Date();
   endsAt.setDate(endsAt.getDate() + plan.durationDays);
   const sub = await db.subscription.create({
-    data: { memberId: member.id, planId: plan.id, startsAt: new Date(), endsAt, paidSAR: plan.priceSAR },
+    data: {
+      memberId: member.id,
+      planId: plan.id,
+      startsAt: new Date(),
+      endsAt,
+      paidSAR: finalPrice,
+      discountSAR,
+      offerId: offer?.id ?? null,
+    },
   });
 
   await issueInvoice({
     clubId: club.id,
     memberId: member.id,
     subscriptionId: sub.id,
-    items: [{ description: `اشتراك ${plan.name}`, totalWithVat: plan.priceSAR }],
+    items: [
+      {
+        description: offer ? `اشتراك ${plan.name} — عرض ${offer.name}` : `اشتراك ${plan.name}`,
+        totalWithVat: finalPrice,
+      },
+    ],
   });
 
   revalidatePath("/app/subscriptions");
