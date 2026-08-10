@@ -7,38 +7,88 @@ datasource db {
   url      = "file:./dev.db"
 }
 
-// النادي (Tenant) — كل البيانات مربوطة به تمهيداً للتحول لـ SaaS
+// ───────── المنصة والأندية ─────────
+
+// النادي = المستأجر (Tenant). كل البيانات مربوطة به.
 model Club {
   id        String   @id @default(cuid())
   name      String
+  slug      String   @unique
   phone     String?
+  address   String?
+  vatNumber String? // الرقم الضريبي — يظهر في الفاتورة
+  crNumber  String? // السجل التجاري
   createdAt DateTime @default(now())
 
-  members  Member[]
-  plans    Plan[]
-  classes  GymClass[]
+  // اشتراك النادي في منصتنا (نحن مزود الحل)
+  platformPlan    String   @default("basic") // basic | pro | enterprise
+  platformFeeSAR  Float    @default(299)
+  platformStatus  String   @default("active") // active | trial | suspended
+  platformEndsAt  DateTime
+
+  users            User[]
+  members          Member[]
+  plans            Plan[]
+  classes          GymClass[]
+  invoices         Invoice[]
+  expenses         Expense[]
+  employees        Employee[]
+  platformInvoices PlatformInvoice[]
 }
 
+// فاتورة اشتراك النادي في المنصة (إيرادنا نحن)
+model PlatformInvoice {
+  id        String    @id @default(cuid())
+  clubId    String
+  club      Club      @relation(fields: [clubId], references: [id])
+  month     String // YYYY-MM
+  amountSAR Float
+  status    String    @default("unpaid") // paid | unpaid
+  issuedAt  DateTime  @default(now())
+  paidAt    DateTime?
+
+  @@unique([clubId, month])
+}
+
+// ───────── المستخدمون والصلاحيات ─────────
+
+// الأدوار: super_admin (نحن) | owner | manager | accountant | hr | reception
+model User {
+  id           String   @id @default(cuid())
+  clubId       String?
+  club         Club?    @relation(fields: [clubId], references: [id])
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String
+  active       Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+}
+
+// ───────── الأعضاء والاشتراكات ─────────
+
 model Member {
-  id         String   @id @default(cuid())
-  clubId     String
-  club       Club     @relation(fields: [clubId], references: [id])
-  name       String
-  phone      String
-  memberNo   Int
-  gender     String   @default("male")
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  clubId    String
+  club      Club     @relation(fields: [clubId], references: [id])
+  name      String
+  phone     String
+  memberNo  Int
+  gender    String   @default("male")
+  notes     String?
+  createdAt DateTime @default(now())
 
   subscriptions Subscription[]
   attendance    Attendance[]
   bookings      Booking[]
+  invoices      Invoice[]
 
   @@unique([clubId, memberNo])
   @@index([clubId, name])
   @@index([clubId, phone])
 }
 
-// خطة اشتراك (شهري، 3 شهور، سنوي...)
 model Plan {
   id           String  @id @default(cuid())
   clubId       String
@@ -52,18 +102,21 @@ model Plan {
 }
 
 model Subscription {
-  id        String   @id @default(cuid())
-  memberId  String
-  member    Member   @relation(fields: [memberId], references: [id])
-  planId    String
-  plan      Plan     @relation(fields: [planId], references: [id])
-  startsAt  DateTime
-  endsAt    DateTime
-  paidSAR   Float
-  // active | frozen | cancelled — الانتهاء يُحسب من endsAt
-  status    String   @default("active")
-  frozenAt  DateTime?
-  createdAt DateTime @default(now())
+  id         String    @id @default(cuid())
+  memberId   String
+  member     Member    @relation(fields: [memberId], references: [id])
+  planId     String
+  plan       Plan      @relation(fields: [planId], references: [id])
+  startsAt   DateTime
+  endsAt     DateTime
+  paidSAR    Float
+  status     String    @default("active") // active | frozen | cancelled
+  frozenAt   DateTime?
+  frozenDays Int       @default(0)
+  source     String    @default("reception") // reception | app | urpass
+  createdAt  DateTime  @default(now())
+
+  invoices Invoice[]
 
   @@index([memberId, endsAt])
 }
@@ -73,13 +126,13 @@ model Attendance {
   memberId  String
   member    Member   @relation(fields: [memberId], references: [id])
   checkedAt DateTime @default(now())
-  // reception | fingerprint | wristband | gate
-  source    String   @default("reception")
+  source    String   @default("reception") // reception | fingerprint | wristband | gate
 
   @@index([memberId, checkedAt])
 }
 
-// تعريف الحصة (كروس فت، يوغا...)
+// ───────── الحصص والحجوزات ─────────
+
 model GymClass {
   id          String @id @default(cuid())
   clubId      String
@@ -92,7 +145,6 @@ model GymClass {
   sessions ClassSession[]
 }
 
-// جلسة فعلية بتاريخ ووقت — مصدر الحقيقة الوحيد للسعة
 model ClassSession {
   id       String   @id @default(cuid())
   classId  String
@@ -111,12 +163,124 @@ model Booking {
   session   ClassSession @relation(fields: [sessionId], references: [id])
   memberId  String
   member    Member       @relation(fields: [memberId], references: [id])
-  // booked | waitlist | cancelled | attended
-  status    String       @default("booked")
-  // app | reception | urpass | partner — منه نعرف مصدر كل عميل
-  source    String       @default("reception")
+  status    String       @default("booked") // booked | waitlist | cancelled | attended
+  source    String       @default("reception") // app | reception | urpass
   createdAt DateTime     @default(now())
 
   @@unique([sessionId, memberId])
   @@index([sessionId, status])
+}
+
+// ───────── المحاسبة ─────────
+
+model Invoice {
+  id             String   @id @default(cuid())
+  clubId         String
+  club           Club     @relation(fields: [clubId], references: [id])
+  memberId       String?
+  member         Member?  @relation(fields: [memberId], references: [id])
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  number         String // رقم الفاتورة التسلسلي
+  uuid           String   @default(cuid())
+  issuedAt       DateTime @default(now())
+  subtotalSAR    Float
+  vatSAR         Float
+  totalSAR       Float
+  status         String   @default("paid") // paid | unpaid | refunded
+  qrTLV          String? // رمز QR بصيغة ZATCA (TLV/Base64)
+
+  items    InvoiceItem[]
+  payments Payment[]
+
+  @@unique([clubId, number])
+  @@index([clubId, issuedAt])
+}
+
+model InvoiceItem {
+  id           String  @id @default(cuid())
+  invoiceId    String
+  invoice      Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description  String
+  qty          Int     @default(1)
+  unitPriceSAR Float
+}
+
+model Payment {
+  id        String   @id @default(cuid())
+  invoiceId String
+  invoice   Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  method    String // cash | mada | visa | transfer | tabby | tamara
+  amountSAR Float
+  paidAt    DateTime @default(now())
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  clubId      String
+  club        Club     @relation(fields: [clubId], references: [id])
+  category    String // رواتب | إيجار | صيانة | تسويق | مرافق | أخرى
+  description String
+  amountSAR   Float
+  spentAt     DateTime @default(now())
+
+  @@index([clubId, spentAt])
+}
+
+// ───────── الموارد البشرية ─────────
+
+model Employee {
+  id         String   @id @default(cuid())
+  clubId     String
+  club       Club     @relation(fields: [clubId], references: [id])
+  name       String
+  jobTitle   String
+  department String // إدارة | تدريب | استقبال | صيانة | محاسبة
+  salarySAR  Float
+  phone      String
+  iban       String?
+  hireDate   DateTime
+  status     String   @default("active") // active | on_leave | terminated
+
+  leaves   Leave[]
+  payrolls Payroll[]
+  shifts   StaffAttendance[]
+}
+
+model Leave {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type       String // سنوية | مرضية | اضطرارية | بدون راتب
+  startsAt   DateTime
+  endsAt     DateTime
+  status     String   @default("pending") // pending | approved | rejected
+  note       String?
+}
+
+model Payroll {
+  id            String    @id @default(cuid())
+  employeeId    String
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  month         String // YYYY-MM
+  baseSAR       Float
+  bonusSAR      Float     @default(0)
+  deductionsSAR Float     @default(0)
+  netSAR        Float
+  status        String    @default("pending") // pending | paid
+  paidAt        DateTime?
+
+  @@unique([employeeId, month])
+}
+
+model StaffAttendance {
+  id         String    @id @default(cuid())
+  employeeId String
+  employee   Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  day        DateTime
+  checkIn    DateTime?
+  checkOut   DateTime?
+  status     String    @default("present") // present | absent | leave
+
+  @@unique([employeeId, day])
 }
