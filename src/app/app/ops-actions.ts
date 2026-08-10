@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
+import { generateApiKey } from "@/lib/api-auth";
 import { requireModule } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { runBackup } from "@/lib/backup";
@@ -207,6 +209,65 @@ export async function takeBackup() {
     entity: "backup",
     summary: `أخذ نسخة احتياطية (${result.counts.members} عضو، ${result.counts.invoices} فاتورة)`,
   });
+  revalidatePath("/app/settings");
+}
+
+// ═════════ مفاتيح API ═════════
+
+// المفتاح يُعرض مرة واحدة فقط — نعيده عبر كوكي مؤقت لتعرضه الصفحة
+export async function createApiKey(formData: FormData) {
+  const user = await requireModule("settings");
+  const name = str(formData, "name");
+  const scopes = [
+    formData.get("scopeRead") === "on" && "read",
+    formData.get("scopeWrite") === "on" && "write",
+    formData.get("scopeCheckin") === "on" && "checkin",
+  ]
+    .filter(Boolean)
+    .join(",");
+
+  if (!name || !scopes) return;
+
+  const { raw, prefix, keyHash } = generateApiKey();
+  await db.apiKey.create({
+    data: { clubId: user.clubId!, name, prefix, keyHash, scopes },
+  });
+
+  (await cookies()).set("nadi_new_key", raw, {
+    httpOnly: false,
+    maxAge: 120,
+    path: "/app/settings",
+  });
+
+  await audit({ user, action: "create", entity: "api_key", summary: `إنشاء مفتاح API «${name}» بصلاحيات ${scopes}` });
+  revalidatePath("/app/settings");
+}
+
+export async function toggleApiKey(formData: FormData) {
+  const user = await requireModule("settings");
+  const id = str(formData, "keyId");
+  const key = await db.apiKey.findFirst({ where: { id, clubId: user.clubId! } });
+  if (!key) return;
+
+  await db.apiKey.update({ where: { id }, data: { active: !key.active } });
+  await audit({
+    user,
+    action: key.active ? "suspend" : "activate",
+    entity: "api_key",
+    entityId: id,
+    summary: `${key.active ? "إيقاف" : "تفعيل"} مفتاح «${key.name}»`,
+  });
+  revalidatePath("/app/settings");
+}
+
+export async function deleteApiKey(formData: FormData) {
+  const user = await requireModule("settings");
+  const id = str(formData, "keyId");
+  const key = await db.apiKey.findFirst({ where: { id, clubId: user.clubId! } });
+  if (!key) return;
+
+  await db.apiKey.delete({ where: { id } });
+  await audit({ user, action: "delete", entity: "api_key", entityId: id, summary: `حذف مفتاح «${key.name}»` });
   revalidatePath("/app/settings");
 }
 

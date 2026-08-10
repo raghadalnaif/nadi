@@ -1,4 +1,4 @@
-import { Building2, DatabaseBackup, Download, Fingerprint, KeyRound, Pencil, Power, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { Building2, DatabaseBackup, Download, Fingerprint, KeyRound, Pencil, Plug, Power, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { db } from "@/lib/db";
 import { MODULE_ACCESS, ROLES, requireModule, type Role } from "@/lib/auth";
 import { ACTION_LABEL } from "@/lib/audit";
@@ -13,7 +13,8 @@ import {
   toggleUser,
   updateUser,
 } from "../manage-actions";
-import { saveCheckinSettings, takeBackup } from "../ops-actions";
+import { cookies } from "next/headers";
+import { createApiKey, deleteApiKey, saveCheckinSettings, takeBackup, toggleApiKey } from "../ops-actions";
 import { listBackups } from "@/lib/backup";
 
 const CHECKIN_METHODS = [
@@ -60,7 +61,11 @@ export default async function SettingsPage() {
   ]);
   if (!club) return null;
 
-  const backups = await listBackups(club.slug);
+  const [backups, apiKeys, newKey] = await Promise.all([
+    listBackups(club.slug),
+    db.apiKey.findMany({ where: { clubId }, orderBy: { createdAt: "desc" } }),
+    cookies().then((c) => c.get("nadi_new_key")?.value),
+  ]);
   const settings = club as unknown as Record<string, boolean>;
 
   return (
@@ -331,6 +336,123 @@ export default async function SettingsPage() {
             </tr>
           ))}
         </Table>
+      </Card>
+
+      <Card
+        title="الربط مع التطبيقات (API)"
+        className="mt-5"
+        action={
+          <Dialog label="مفتاح جديد" title="إنشاء مفتاح API" description="يُعرض المفتاح مرة واحدة فقط" variant="ghost" icon={<Plug className="w-4 h-4" />}>
+            <form action={createApiKey} className="space-y-3">
+              <Field label="اسم الاستخدام">
+                <Input name="name" required placeholder="تطبيق الجوال / جهاز البصمة / UrPass" />
+              </Field>
+              <div className="space-y-2">
+                <p className="text-sm text-slate-600">الصلاحيات</p>
+                {[
+                  { key: "scopeRead", label: "قراءة", hint: "الأعضاء، الباقات، الحصص" },
+                  { key: "scopeWrite", label: "كتابة", hint: "تسجيل أعضاء واشتراكات وحجوزات" },
+                  { key: "scopeCheckin", label: "تحضير", hint: "للبصمة والبوابات والأساور" },
+                ].map((sc) => (
+                  <label key={sc.key} className="flex items-start gap-3 rounded-xl border border-slate-200 px-3.5 py-2.5 cursor-pointer hover:border-emerald-300 transition">
+                    <input type="checkbox" name={sc.key} defaultChecked={sc.key !== "scopeCheckin"} className="mt-0.5 w-4 h-4 accent-emerald-600" />
+                    <span className="flex-1">
+                      <span className="block text-sm font-bold text-slate-800">{sc.label}</span>
+                      <span className="block text-xs text-slate-400">{sc.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <Submit>إنشاء المفتاح</Submit>
+            </form>
+          </Dialog>
+        }
+      >
+        {newKey && (
+          <div className="mx-5 mt-5 rounded-xl bg-emerald-50 ring-1 ring-emerald-100 px-4 py-3">
+            <p className="text-sm font-bold text-emerald-800 mb-1.5">مفتاحك الجديد — انسخه الآن، لن يظهر مرة أخرى</p>
+            <code className="block bg-white rounded-lg px-3 py-2 text-xs font-mono text-slate-800 break-all" dir="ltr">
+              {newKey}
+            </code>
+          </div>
+        )}
+
+        {apiKeys.length === 0 ? (
+          <Empty text="لا توجد مفاتيح — أنشئ مفتاحاً لربط تطبيق أو جهاز" />
+        ) : (
+          <Table
+            head={
+              <>
+                <Th>الاستخدام</Th>
+                <Th>المفتاح</Th>
+                <Th>الصلاحيات</Th>
+                <Th>الاستدعاءات</Th>
+                <Th>آخر استخدام</Th>
+                <Th>إجراء</Th>
+              </>
+            }
+          >
+            {apiKeys.map((k) => (
+              <tr key={k.id} className="hover:bg-slate-50/60 transition">
+                <Td className="font-bold">{k.name}</Td>
+                <Td>
+                  <code className="text-xs bg-slate-100 text-slate-600 px-2 py-1 rounded-lg" dir="ltr">
+                    {k.prefix}…
+                  </code>
+                </Td>
+                <Td>
+                  <div className="flex gap-1 flex-wrap">
+                    {k.scopes.split(",").map((sc) => (
+                      <Badge key={sc} tone="violet">
+                        {sc === "read" ? "قراءة" : sc === "write" ? "كتابة" : "تحضير"}
+                      </Badge>
+                    ))}
+                  </div>
+                </Td>
+                <Td className="text-slate-500 tabular-nums">{k.callCount}</Td>
+                <Td className="text-slate-500 text-xs whitespace-nowrap">
+                  {k.lastUsedAt ? fullDate(k.lastUsedAt) : "لم يُستخدم"}
+                </Td>
+                <Td>
+                  <div className="flex items-center gap-1">
+                    <form action={toggleApiKey}>
+                      <input type="hidden" name="keyId" value={k.id} />
+                      <button
+                        title={k.active ? "إيقاف" : "تفعيل"}
+                        className="w-9 h-9 rounded-lg grid place-items-center text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition"
+                      >
+                        <Power className="w-4 h-4" />
+                      </button>
+                    </form>
+                    <form action={deleteApiKey}>
+                      <input type="hidden" name="keyId" value={k.id} />
+                      <ConfirmButton
+                        label="حذف"
+                        message={`حذف مفتاح ${k.name}؟ ستتوقف التطبيقات المرتبطة به فوراً.`}
+                        icon={<Trash2 className="w-4 h-4" />}
+                      />
+                    </form>
+                  </div>
+                </Td>
+              </tr>
+            ))}
+          </Table>
+        )}
+
+        <div className="px-5 py-4 border-t border-slate-100 text-xs text-slate-500 leading-relaxed">
+          <p className="font-bold text-slate-700 mb-1.5">نقاط الاتصال المتاحة:</p>
+          <code dir="ltr" className="block bg-slate-50 rounded-lg p-3 font-mono text-[11px] space-y-0.5 text-slate-600">
+            GET&nbsp;&nbsp;/api/v1/plans<br />
+            GET&nbsp;&nbsp;/api/v1/members?q=<br />
+            POST /api/v1/members<br />
+            GET&nbsp;&nbsp;/api/v1/subscriptions?status=active<br />
+            POST /api/v1/subscriptions&nbsp;&nbsp;← إدراج العضويات<br />
+            GET&nbsp;&nbsp;/api/v1/classes?days=7<br />
+            POST /api/v1/bookings<br />
+            POST /api/v1/checkin&nbsp;&nbsp;← البصمة والبوابات
+          </code>
+          <p className="mt-2">أرسل المفتاح في الترويسة: <code dir="ltr" className="bg-slate-100 px-1.5 py-0.5 rounded">Authorization: Bearer &lt;key&gt;</code></p>
+        </div>
       </Card>
 
       <Card

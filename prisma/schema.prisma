@@ -43,6 +43,7 @@ model Club {
   expenses         Expense[]
   employees        Employee[]
   offers           Offer[]
+  apiKeys          ApiKey[]
   platformInvoices PlatformInvoice[]
 }
 
@@ -58,6 +59,23 @@ model PlatformInvoice {
   paidAt    DateTime?
 
   @@unique([clubId, month])
+}
+
+// مفتاح API — يربط التطبيقات والأجهزة الخارجية بالنادي
+model ApiKey {
+  id         String    @id @default(cuid())
+  clubId     String
+  club       Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  name       String // وصف الاستخدام: تطبيق الجوال، UrPass، جهاز البصمة…
+  prefix     String // أول 8 أحرف للعرض في الواجهة
+  keyHash    String    @unique // نخزّن الهاش فقط، المفتاح يُعرض مرة واحدة
+  scopes     String    @default("read,write") // read | write | checkin
+  active     Boolean   @default(true)
+  lastUsedAt DateTime?
+  callCount  Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  @@index([clubId, active])
 }
 
 // سجل التدقيق — من فعل ماذا ومتى. أساسي في نظام فيه أموال.
