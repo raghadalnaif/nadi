@@ -40,7 +40,7 @@ model Club {
 model PlatformInvoice {
   id        String    @id @default(cuid())
   clubId    String
-  club      Club      @relation(fields: [clubId], references: [id])
+  club      Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
   month     String // YYYY-MM
   amountSAR Float
   status    String    @default("unpaid") // paid | unpaid
@@ -48,6 +48,21 @@ model PlatformInvoice {
   paidAt    DateTime?
 
   @@unique([clubId, month])
+}
+
+// سجل التدقيق — من فعل ماذا ومتى. أساسي في نظام فيه أموال.
+model AuditLog {
+  id       String   @id @default(cuid())
+  clubId   String? // null = إجراء على مستوى المنصة
+  userId   String
+  userName String
+  action   String // create | update | delete | pay | suspend …
+  entity   String // club | member | employee | plan | invoice …
+  entityId String?
+  summary  String // وصف عربي مقروء للإجراء
+  at       DateTime @default(now())
+
+  @@index([clubId, at])
 }
 
 // ───────── المستخدمون والصلاحيات ─────────
@@ -104,7 +119,7 @@ model Plan {
 model Subscription {
   id         String    @id @default(cuid())
   memberId   String
-  member     Member    @relation(fields: [memberId], references: [id])
+  member     Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
   planId     String
   plan       Plan      @relation(fields: [planId], references: [id])
   startsAt   DateTime
@@ -124,7 +139,7 @@ model Subscription {
 model Attendance {
   id        String   @id @default(cuid())
   memberId  String
-  member    Member   @relation(fields: [memberId], references: [id])
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
   checkedAt DateTime @default(now())
   source    String   @default("reception") // reception | fingerprint | wristband | gate
 
@@ -148,7 +163,7 @@ model GymClass {
 model ClassSession {
   id       String   @id @default(cuid())
   classId  String
-  gymClass GymClass @relation(fields: [classId], references: [id])
+  gymClass GymClass @relation(fields: [classId], references: [id], onDelete: Cascade)
   startsAt DateTime
   capacity Int
 
@@ -160,9 +175,9 @@ model ClassSession {
 model Booking {
   id        String       @id @default(cuid())
   sessionId String
-  session   ClassSession @relation(fields: [sessionId], references: [id])
+  session   ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   memberId  String
-  member    Member       @relation(fields: [memberId], references: [id])
+  member    Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
   status    String       @default("booked") // booked | waitlist | cancelled | attended
   source    String       @default("reception") // app | reception | urpass
   createdAt DateTime     @default(now())
@@ -178,9 +193,9 @@ model Invoice {
   clubId         String
   club           Club     @relation(fields: [clubId], references: [id])
   memberId       String?
-  member         Member?  @relation(fields: [memberId], references: [id])
+  member         Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
   subscriptionId String?
-  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   number         String // رقم الفاتورة التسلسلي
   uuid           String   @default(cuid())
   issuedAt       DateTime @default(now())
@@ -189,6 +204,15 @@ model Invoice {
   totalSAR       Float
   status         String   @default("paid") // paid | unpaid | refunded
   qrTLV          String? // رمز QR بصيغة ZATCA (TLV/Base64)
+
+  // متطلبات الفوترة الإلكترونية — هيئة الزكاة والضريبة والدخل
+  invoiceType String  @default("simplified") // simplified = مبسطة (B2C) | standard = ضريبية (B2B)
+  buyerName   String? // إلزامي في الفاتورة الضريبية B2B
+  buyerVat    String? // الرقم الضريبي للمشتري
+  icv         Int     @default(1) // العداد التسلسلي للفاتورة (Invoice Counter Value)
+  pih         String? // هاش الفاتورة السابقة (Previous Invoice Hash) — سلسلة الترابط
+  hash        String? // هاش هذه الفاتورة (SHA-256 من XML)
+  xml         String? // مستند UBL 2.1
 
   items    InvoiceItem[]
   payments Payment[]

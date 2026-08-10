@@ -1,9 +1,11 @@
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, Banknote, FileText, Plus, Scale, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Banknote, FileText, Plus, Scale, Trash2, Wallet } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { Badge, Bar, Card, Empty, PageHeader, StatCard, Table, Td, Th, fullDate, num, payMethodLabel, sar } from "@/lib/ui";
+import { ConfirmButton } from "@/components/dialog";
 import { addExpense, payInvoice } from "../actions";
+import { deleteExpense } from "../manage-actions";
 
 const categories = ["إيجار", "رواتب", "مرافق", "صيانة", "تسويق", "أخرى"];
 
@@ -117,7 +119,7 @@ export default async function AccountingPage() {
                 <tr key={inv.id} className="hover:bg-slate-50/60 transition">
                   <Td>
                     <Link
-                      href={`/app/accounting/${inv.id}`}
+                      href={`/app/invoices/${inv.id}`}
                       className="font-bold text-emerald-700 hover:underline tabular-nums"
                       dir="ltr"
                     >
@@ -245,6 +247,7 @@ export default async function AccountingPage() {
                 <Th>الوصف</Th>
                 <Th>التاريخ</Th>
                 <Th>المبلغ</Th>
+                <Th>إجراء</Th>
               </>
             }
           >
@@ -254,6 +257,16 @@ export default async function AccountingPage() {
                 <Td className="text-slate-600">{e.description}</Td>
                 <Td className="text-slate-500 whitespace-nowrap">{fullDate(e.spentAt)}</Td>
                 <Td className="font-bold text-red-600 tabular-nums whitespace-nowrap">{sar(e.amountSAR)}</Td>
+                <Td>
+                  <form action={deleteExpense}>
+                    <input type="hidden" name="expenseId" value={e.id} />
+                    <ConfirmButton
+                      label="حذف"
+                      message={`حذف مصروف «${e.description}» بمبلغ ${sar(e.amountSAR)}؟`}
+                      icon={<Trash2 className="w-4 h-4" />}
+                    />
+                  </form>
+                </Td>
               </tr>
             ))}
           </Table>

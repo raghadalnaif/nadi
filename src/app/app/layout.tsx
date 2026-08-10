@@ -10,6 +10,7 @@ const ALL_ITEMS: NavItem[] = [
   { key: "reception", href: "/app/reception", label: "الاستقبال" },
   { key: "subscriptions", href: "/app/subscriptions", label: "الاشتراكات" },
   { key: "schedule", href: "/app/schedule", label: "الحصص والحجوزات" },
+  { key: "invoices", href: "/app/invoices", label: "الفواتير الضريبية" },
   { key: "accounting", href: "/app/accounting", label: "المحاسبة" },
   { key: "hr", href: "/app/hr", label: "الموارد البشرية" },
   { key: "settings", href: "/app/settings", label: "الإعدادات" },

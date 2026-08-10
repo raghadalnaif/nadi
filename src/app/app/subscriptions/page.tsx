@@ -1,8 +1,12 @@
-import { PauseCircle, PlayCircle, PlusCircle, RefreshCw, Search, Snowflake, UserPlus, Users } from "lucide-react";
+import Link from "next/link";
+import { PauseCircle, Pencil, PlayCircle, Plus, Power, RefreshCw, Search, Snowflake, Trash2, UserPlus, Users } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { Badge, Card, Empty, PageHeader, StatCard, Table, Td, Th, fullDate, num, sar, sourceLabel, subStatus } from "@/lib/ui";
+import { ConfirmButton, Dialog } from "@/components/dialog";
+import { Field, Input, Submit } from "@/components/form";
 import { addMember, renew, toggleFreeze } from "../actions";
+import { deletePlan, savePlan, togglePlan } from "../manage-actions";
 
 const filters = [
   { key: "all", label: "الكل" },
@@ -23,7 +27,7 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/ap
   const weekEnd = new Date(Date.now() + 7 * 86400000);
 
   const [plans, counts, subs] = await Promise.all([
-    db.plan.findMany({ where: { clubId, active: true }, orderBy: { durationDays: "asc" } }),
+    db.plan.findMany({ where: { clubId }, orderBy: { durationDays: "asc" } }),
     Promise.all([
       db.subscription.count({ where: { member: { clubId }, status: "active", endsAt: { gte: now } } }),
       db.subscription.count({ where: { member: { clubId }, status: "active", endsAt: { gte: now, lte: weekEnd } } }),
@@ -110,7 +114,12 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/ap
                   return (
                     <tr key={s.id} className="hover:bg-slate-50/60 transition">
                       <Td>
-                        <p className="font-bold">{s.member.name}</p>
+                        <Link
+                          href={`/app/subscriptions/${s.memberId}`}
+                          className="font-bold hover:text-emerald-700 transition"
+                        >
+                          {s.member.name}
+                        </Link>
                         <p className="text-xs text-slate-400 tabular-nums" dir="ltr">{s.member.phone}</p>
                       </Td>
                       <Td className="text-slate-600">{s.plan.name}</Td>
@@ -175,11 +184,13 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/ap
                   required
                   className="w-full h-11 bg-white border border-slate-200 rounded-xl px-3 text-sm outline-none focus:border-emerald-400"
                 >
-                  {plans.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} — {sar(p.priceSAR)}
-                    </option>
-                  ))}
+                  {plans
+                    .filter((p) => p.active)
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} — {sar(p.priceSAR)}
+                      </option>
+                    ))}
                 </select>
               </div>
               <button className="w-full h-11 rounded-xl bg-emerald-600 text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-emerald-700 active:scale-[0.99] transition">
@@ -190,18 +201,80 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/ap
             </form>
           </Card>
 
-          <Card title="الباقات المتاحة">
+          <Card
+            title="الباقات"
+            action={
+              <Dialog label="باقة جديدة" title="إضافة باقة" variant="ghost" icon={<Plus className="w-4 h-4" />}>
+                <form action={savePlan} className="space-y-3">
+                  <Field label="اسم الباقة">
+                    <Input name="name" required placeholder="نصف سنوي" />
+                  </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="المدة (بالأيام)">
+                      <Input name="durationDays" type="number" min="1" required defaultValue={30} />
+                    </Field>
+                    <Field label="السعر (شامل الضريبة)">
+                      <Input name="priceSAR" type="number" min="0" step="1" required defaultValue={299} />
+                    </Field>
+                  </div>
+                  <Submit>إضافة الباقة</Submit>
+                </form>
+              </Dialog>
+            }
+          >
             <ul className="divide-y divide-slate-50">
               {plans.map((p) => (
-                <li key={p.id} className="flex items-center justify-between px-5 py-3.5">
-                  <div>
-                    <p className="text-sm font-bold">{p.name}</p>
-                    <p className="text-xs text-slate-400">{num(p.durationDays)} يوم</p>
+                <li key={p.id} className="flex items-center gap-2 px-5 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold flex items-center gap-2">
+                      {p.name}
+                      {!p.active && <Badge tone="slate">معطّلة</Badge>}
+                    </p>
+                    <p className="text-xs text-slate-400">
+                      {num(p.durationDays)} يوم · {sar(p.priceSAR)}
+                    </p>
                   </div>
-                  <span className="text-sm font-bold text-emerald-700 tabular-nums">{sar(p.priceSAR)}</span>
+
+                  <Dialog label="تعديل" title={`تعديل باقة ${p.name}`} variant="icon" icon={<Pencil className="w-4 h-4" />}>
+                    <form action={savePlan} className="space-y-3">
+                      <input type="hidden" name="planId" value={p.id} />
+                      <Field label="اسم الباقة">
+                        <Input name="name" defaultValue={p.name} required />
+                      </Field>
+                      <div className="grid grid-cols-2 gap-3">
+                        <Field label="المدة (بالأيام)">
+                          <Input name="durationDays" type="number" min="1" defaultValue={p.durationDays} required />
+                        </Field>
+                        <Field label="السعر">
+                          <Input name="priceSAR" type="number" min="0" step="1" defaultValue={p.priceSAR} required />
+                        </Field>
+                      </div>
+                      <Submit>حفظ</Submit>
+                    </form>
+                  </Dialog>
+
+                  <form action={togglePlan}>
+                    <input type="hidden" name="planId" value={p.id} />
+                    <button
+                      title={p.active ? "تعطيل" : "تفعيل"}
+                      className="w-9 h-9 rounded-lg grid place-items-center text-slate-400 hover:bg-amber-50 hover:text-amber-600 transition"
+                    >
+                      <Power className="w-4 h-4" />
+                    </button>
+                  </form>
+
+                  <form action={deletePlan}>
+                    <input type="hidden" name="planId" value={p.id} />
+                    <ConfirmButton
+                      label="حذف"
+                      message={`حذف باقة ${p.name}؟ إذا كانت مستخدمة في اشتراكات سابقة فستُعطّل بدل الحذف.`}
+                      icon={<Trash2 className="w-4 h-4" />}
+                    />
+                  </form>
                 </li>
               ))}
             </ul>
+            {plans.length === 0 && <Empty text="لا توجد باقات — أضف أول باقة" />}
             <div className="px-5 py-3 border-t border-slate-100 flex items-center justify-between">
               <span className="text-xs text-slate-400">إجمالي الإيراد المحصّل</span>
               <span className="text-sm font-bold tabular-nums">{sar(revenue._sum.totalSAR ?? 0)}</span>

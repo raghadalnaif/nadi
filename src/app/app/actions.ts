@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
-import { splitVat, zatcaQR } from "@/lib/zatca";
+import { issueInvoice } from "@/lib/invoicing";
 
 // يمنع تعديل بيانات نادٍ آخر — تُستدعى في كل إجراء
 async function memberOfMyClub(memberId: string, clubId: string) {
@@ -48,33 +48,17 @@ export async function renew(formData: FormData) {
     data: { memberId, planId: last.planId, startsAt, endsAt, paidSAR: last.plan.priceSAR },
   });
 
-  // كل تجديد يولّد فاتورة ضريبية تلقائياً
-  const money = splitVat(last.plan.priceSAR);
-  const count = await db.invoice.count({ where: { clubId: club.id } });
-  await db.invoice.create({
-    data: {
-      clubId: club.id,
-      memberId,
-      subscriptionId: sub.id,
-      number: `INV-${String(count + 1).padStart(5, "0")}`,
-      subtotalSAR: money.subtotal,
-      vatSAR: money.vat,
-      totalSAR: money.total,
-      status: "paid",
-      qrTLV: zatcaQR({
-        sellerName: club.name,
-        vatNumber: club.vatNumber ?? "",
-        timestamp: new Date(),
-        totalWithVat: money.total,
-        vatAmount: money.vat,
-      }),
-      items: { create: [{ description: `تجديد اشتراك ${last.plan.name}`, unitPriceSAR: money.subtotal }] },
-      payments: { create: [{ method: "cash", amountSAR: money.total }] },
-    },
+  // كل تجديد يولّد فاتورة ضريبية مرتبطة بسلسلة ZATCA
+  await issueInvoice({
+    clubId: club.id,
+    memberId,
+    subscriptionId: sub.id,
+    items: [{ description: `تجديد اشتراك ${last.plan.name}`, totalWithVat: last.plan.priceSAR }],
   });
 
   revalidatePath("/app/reception");
   revalidatePath("/app/subscriptions");
+  revalidatePath("/app/invoices");
   revalidatePath("/app/accounting");
 }
 
@@ -134,30 +118,15 @@ export async function addMember(formData: FormData) {
     data: { memberId: member.id, planId: plan.id, startsAt: new Date(), endsAt, paidSAR: plan.priceSAR },
   });
 
-  const money = splitVat(plan.priceSAR);
-  const count = await db.invoice.count({ where: { clubId: club.id } });
-  await db.invoice.create({
-    data: {
-      clubId: club.id,
-      memberId: member.id,
-      subscriptionId: sub.id,
-      number: `INV-${String(count + 1).padStart(5, "0")}`,
-      subtotalSAR: money.subtotal,
-      vatSAR: money.vat,
-      totalSAR: money.total,
-      qrTLV: zatcaQR({
-        sellerName: club.name,
-        vatNumber: club.vatNumber ?? "",
-        timestamp: new Date(),
-        totalWithVat: money.total,
-        vatAmount: money.vat,
-      }),
-      items: { create: [{ description: `اشتراك ${plan.name}`, unitPriceSAR: money.subtotal }] },
-      payments: { create: [{ method: "cash", amountSAR: money.total }] },
-    },
+  await issueInvoice({
+    clubId: club.id,
+    memberId: member.id,
+    subscriptionId: sub.id,
+    items: [{ description: `اشتراك ${plan.name}`, totalWithVat: plan.priceSAR }],
   });
 
   revalidatePath("/app/subscriptions");
+  revalidatePath("/app/invoices");
   revalidatePath("/app/accounting");
 }
 
@@ -202,7 +171,9 @@ export async function payInvoice(formData: FormData) {
 
   await db.invoice.update({ where: { id: invoiceId }, data: { status: "paid" } });
   await db.payment.create({ data: { invoiceId, method, amountSAR: invoice.totalSAR } });
+
   revalidatePath("/app/accounting");
+  revalidatePath("/app/invoices");
 }
 
 export async function payPayroll(formData: FormData) {
@@ -246,4 +217,37 @@ export async function decideLeave(formData: FormData) {
 
   await db.leave.update({ where: { id: leaveId }, data: { status: decision } });
   revalidatePath("/app/hr");
+}
+
+// إصدار فاتورة يدوية (بيع منتج، خدمة، أو فاتورة B2B لشركة)
+export async function createManualInvoice(formData: FormData) {
+  const user = await requireModule("accounting");
+  const description = String(formData.get("description") ?? "").trim();
+  const totalWithVat = Number(formData.get("totalWithVat"));
+  const invoiceType = String(formData.get("invoiceType") ?? "simplified") as
+    | "simplified"
+    | "standard";
+  const buyerName = String(formData.get("buyerName") ?? "").trim();
+  const buyerVat = String(formData.get("buyerVat") ?? "").trim();
+  const memberId = String(formData.get("memberId") ?? "");
+  const status = String(formData.get("status") ?? "paid") as "paid" | "unpaid";
+  const method = String(formData.get("method") ?? "cash");
+  const qty = Math.max(1, Number(formData.get("qty")) || 1);
+
+  if (!description || !Number.isFinite(totalWithVat) || totalWithVat <= 0) return;
+  if (invoiceType === "standard" && !buyerName) return;
+
+  await issueInvoice({
+    clubId: user.clubId!,
+    memberId: memberId || null,
+    items: [{ description, qty, totalWithVat: totalWithVat * qty }],
+    invoiceType,
+    buyerName: buyerName || null,
+    buyerVat: buyerVat || null,
+    status,
+    method,
+  });
+
+  revalidatePath("/app/invoices");
+  revalidatePath("/app/accounting");
 }

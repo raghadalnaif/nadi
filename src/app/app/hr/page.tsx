@@ -1,8 +1,13 @@
-import { BriefcaseBusiness, CalendarOff, Check, CircleDollarSign, Users, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarOff, CalendarPlus, Check, CircleDollarSign, Pencil, Plus, Trash2, UserPlus, Users, X } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { Badge, Card, Empty, PageHeader, StatCard, Table, Td, Th, fullDate, num, sar } from "@/lib/ui";
+import { ConfirmButton, Dialog } from "@/components/dialog";
+import { Field, Input, Select, Submit } from "@/components/form";
 import { decideLeave, payPayroll } from "../actions";
+import { addLeave, deleteEmployee, generatePayroll, saveEmployee } from "../manage-actions";
+
+const departments = ["إدارة", "تدريب", "استقبال", "محاسبة", "صيانة"];
 
 const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
@@ -39,7 +44,85 @@ export default async function HrPage() {
 
   return (
     <>
-      <PageHeader title="الموارد البشرية" subtitle="الموظفون، الرواتب، الإجازات، والحضور" />
+      <PageHeader
+        title="الموارد البشرية"
+        subtitle="الموظفون، الرواتب، الإجازات، والحضور"
+        action={
+          <div className="flex items-center gap-2">
+            <Dialog label="تسجيل إجازة" title="تسجيل طلب إجازة" variant="ghost" icon={<CalendarPlus className="w-4 h-4" />}>
+              <form action={addLeave} className="space-y-3">
+                <Field label="الموظف">
+                  <Select name="employeeId" required>
+                    {employees.map((e) => (
+                      <option key={e.id} value={e.id}>{e.name}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <Field label="نوع الإجازة">
+                  <Select name="type" defaultValue="سنوية">
+                    {["سنوية", "مرضية", "اضطرارية", "بدون راتب"].map((t) => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </Select>
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="من">
+                    <Input name="startsAt" type="date" required />
+                  </Field>
+                  <Field label="إلى">
+                    <Input name="endsAt" type="date" required />
+                  </Field>
+                </div>
+                <Field label="ملاحظة">
+                  <Input name="note" placeholder="سبب الإجازة (اختياري)" />
+                </Field>
+                <Submit>تسجيل الطلب</Submit>
+              </form>
+            </Dialog>
+
+            <Dialog label="مسير رواتب" title="إنشاء مسير رواتب" description="يُنشأ لكل الموظفين على رأس العمل" variant="ghost" icon={<Plus className="w-4 h-4" />}>
+              <form action={generatePayroll} className="space-y-3">
+                <Field label="الشهر">
+                  <Input name="month" defaultValue={thisMonth} placeholder="2026-08" dir="ltr" className="text-right" required />
+                </Field>
+                <Submit>إنشاء المسير</Submit>
+              </form>
+            </Dialog>
+
+            <Dialog label="موظف جديد" title="إضافة موظف" icon={<UserPlus className="w-4 h-4" />}>
+              <form action={saveEmployee} className="space-y-3">
+                <Field label="الاسم">
+                  <Input name="name" required placeholder="محمد العتيبي" />
+                </Field>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="المسمى الوظيفي">
+                    <Input name="jobTitle" required placeholder="مدرب" />
+                  </Field>
+                  <Field label="القسم">
+                    <Select name="department" defaultValue="تدريب">
+                      {departments.map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </Select>
+                  </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="الراتب الشهري">
+                    <Input name="salarySAR" type="number" min="0" step="100" required defaultValue={5000} />
+                  </Field>
+                  <Field label="الجوال">
+                    <Input name="phone" dir="ltr" className="text-right" placeholder="05xxxxxxxx" required />
+                  </Field>
+                </div>
+                <Field label="الآيبان">
+                  <Input name="iban" dir="ltr" className="text-right" placeholder="SA…" />
+                </Field>
+                <Submit>إضافة الموظف</Submit>
+              </form>
+            </Dialog>
+          </div>
+        }
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <StatCard label="عدد الموظفين" value={num(employees.length)} icon={<Users className="w-5 h-5" />} tone="emerald" />
@@ -113,6 +196,7 @@ export default async function HrPage() {
                 <Th>القسم</Th>
                 <Th>الراتب</Th>
                 <Th>الحالة</Th>
+                <Th>إجراء</Th>
               </>
             }
           >
@@ -129,9 +213,64 @@ export default async function HrPage() {
                     {e.status === "active" ? "على رأس العمل" : "في إجازة"}
                   </Badge>
                 </Td>
+                <Td>
+                  <div className="flex items-center gap-1">
+                    <Dialog label="تعديل" title={`تعديل ${e.name}`} variant="icon" icon={<Pencil className="w-4 h-4" />}>
+                      <form action={saveEmployee} className="space-y-3">
+                        <input type="hidden" name="employeeId" value={e.id} />
+                        <Field label="الاسم">
+                          <Input name="name" defaultValue={e.name} required />
+                        </Field>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field label="المسمى الوظيفي">
+                            <Input name="jobTitle" defaultValue={e.jobTitle} required />
+                          </Field>
+                          <Field label="القسم">
+                            <Select name="department" defaultValue={e.department}>
+                              {departments.map((d) => (
+                                <option key={d} value={d}>{d}</option>
+                              ))}
+                            </Select>
+                          </Field>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field label="الراتب">
+                            <Input name="salarySAR" type="number" min="0" step="100" defaultValue={e.salarySAR} required />
+                          </Field>
+                          <Field label="الجوال">
+                            <Input name="phone" defaultValue={e.phone} dir="ltr" className="text-right" required />
+                          </Field>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Field label="الآيبان">
+                            <Input name="iban" defaultValue={e.iban ?? ""} dir="ltr" className="text-right" />
+                          </Field>
+                          <Field label="الحالة">
+                            <Select name="status" defaultValue={e.status}>
+                              <option value="active">على رأس العمل</option>
+                              <option value="on_leave">في إجازة</option>
+                              <option value="terminated">منتهي الخدمة</option>
+                            </Select>
+                          </Field>
+                        </div>
+                        <Submit>حفظ</Submit>
+                      </form>
+                    </Dialog>
+
+                    <form action={deleteEmployee}>
+                      <input type="hidden" name="employeeId" value={e.id} />
+                      <ConfirmButton
+                        label="حذف"
+                        message={`حذف الموظف ${e.name} نهائياً؟ ستُحذف رواتبه وإجازاته وسجل حضوره.`}
+                        icon={<Trash2 className="w-4 h-4" />}
+                      />
+                    </form>
+                  </div>
+                </Td>
               </tr>
             ))}
           </Table>
+          {employees.length === 0 && <Empty text="لا يوجد موظفون — أضف أول موظف" />}
         </Card>
 
         <Card title={`مسير رواتب ${thisMonth}`}>

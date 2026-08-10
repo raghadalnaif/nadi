@@ -76,6 +76,7 @@ export const MODULE_ACCESS: Record<string, Role[]> = {
   reception: ["owner", "manager", "reception"],
   subscriptions: ["owner", "manager", "reception", "accountant"],
   schedule: ["owner", "manager", "reception"],
+  invoices: ["owner", "accountant", "manager"],
   accounting: ["owner", "accountant"],
   hr: ["owner", "hr", "manager"],
   settings: ["owner"],

@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/auth";
-import { splitVat, zatcaQR } from "../src/lib/zatca";
+import { issueInvoice } from "../src/lib/invoicing";
 
 const db = new PrismaClient();
 
@@ -113,43 +113,14 @@ async function buildClub(opts: {
       },
     });
 
-    // فاتورة ضريبية لكل اشتراك
-    const money = splitVat(plan.priceSAR);
-    const issuedAt = shift(daysLeft - plan.durationDays);
-    await db.invoice.create({
-      data: {
-        clubId: club.id,
-        memberId: member.id,
-        subscriptionId: sub.id,
-        number: `INV-${String(i + 1).padStart(5, "0")}`,
-        issuedAt,
-        subtotalSAR: money.subtotal,
-        vatSAR: money.vat,
-        totalSAR: money.total,
-        status: i % 9 === 0 ? "unpaid" : "paid",
-        qrTLV: zatcaQR({
-          sellerName: club.name,
-          vatNumber: opts.vat,
-          timestamp: issuedAt,
-          totalWithVat: money.total,
-          vatAmount: money.vat,
-        }),
-        items: {
-          create: [{ description: `اشتراك ${plan.name}`, qty: 1, unitPriceSAR: money.subtotal }],
-        },
-        payments:
-          i % 9 === 0
-            ? undefined
-            : {
-                create: [
-                  {
-                    method: pick(["cash", "mada", "visa", "tabby", "tamara", "transfer"], i),
-                    amountSAR: money.total,
-                    paidAt: issuedAt,
-                  },
-                ],
-              },
-      },
+    // فاتورة ضريبية لكل اشتراك — عبر المُصدِر المركزي (سلسلة ZATCA)
+    await issueInvoice({
+      clubId: club.id,
+      memberId: member.id,
+      subscriptionId: sub.id,
+      items: [{ description: `اشتراك ${plan.name}`, totalWithVat: plan.priceSAR }],
+      status: i % 9 === 0 ? "unpaid" : "paid",
+      method: pick(["cash", "mada", "visa", "tabby", "tamara", "transfer"], i),
     });
 
     // حضور خلال آخر أسبوعين
