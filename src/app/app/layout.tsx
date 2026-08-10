@@ -8,7 +8,10 @@ import { SideNav, type NavItem } from "./nav";
 const ALL_ITEMS: NavItem[] = [
   { key: "dashboard", href: "/app/dashboard", label: "لوحة الإدارة" },
   { key: "reception", href: "/app/reception", label: "الاستقبال" },
+  { key: "pos", href: "/app/pos", label: "الكاشير" },
   { key: "subscriptions", href: "/app/subscriptions", label: "الاشتراكات" },
+  { key: "leads", href: "/app/leads", label: "العملاء المحتملون" },
+  { key: "messages", href: "/app/messages", label: "رسائل واتساب" },
   { key: "schedule", href: "/app/schedule", label: "الحصص والحجوزات" },
   { key: "offers", href: "/app/offers", label: "العروض والخصومات" },
   { key: "invoices", href: "/app/invoices", label: "الفواتير الضريبية" },

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { issueInvoice } from "@/lib/invoicing";
 import { postExpense, postPayment } from "@/lib/ledger";
+import { queueMessage } from "@/lib/whatsapp";
 
 // يمنع تعديل بيانات نادٍ آخر — تُستدعى في كل إجراء
 async function memberOfMyClub(memberId: string, clubId: string) {
@@ -180,8 +181,26 @@ export async function addMember(formData: FormData) {
     ],
   });
 
+  // رسالة ترحيب تلقائية
+  if (club.waAutoWelcome) {
+    await queueMessage({
+      clubId: club.id,
+      kind: "welcome",
+      memberId: member.id,
+      toName: member.name,
+      phone: member.phone,
+      vars: {
+        الاسم: member.name,
+        الباقة: plan.name,
+        تاريخ_الانتهاء: new Intl.DateTimeFormat("ar-SA", { dateStyle: "long" }).format(endsAt),
+        رقم_العضوية: memberNo,
+      },
+    });
+  }
+
   revalidatePath("/app/subscriptions");
   revalidatePath("/app/invoices");
+  revalidatePath("/app/messages");
   revalidatePath("/app/accounting");
 }
 

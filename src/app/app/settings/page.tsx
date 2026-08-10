@@ -1,4 +1,4 @@
-import { Building2, DatabaseBackup, Download, Fingerprint, KeyRound, MapPin, Pencil, Plug, Power, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { Building2, DatabaseBackup, Download, Fingerprint, KeyRound, MapPin, MessageCircle, Pencil, Plug, Power, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { db } from "@/lib/db";
 import { MODULE_ACCESS, ROLES, requireModule, type Role } from "@/lib/auth";
 import { ACTION_LABEL } from "@/lib/audit";
@@ -17,6 +17,7 @@ import { cookies } from "next/headers";
 import { createApiKey, deleteApiKey, saveCheckinSettings, takeBackup, toggleApiKey } from "../ops-actions";
 import { listBackups } from "@/lib/backup";
 import { saveClubLocation } from "../hr/actions";
+import { saveWhatsappSettings } from "../messages/actions";
 
 const CHECKIN_METHODS = [
   { key: "checkinManual", label: "تحضير يدوي من الاستقبال", hint: "الموظف يبحث ويضغط تحضير" },
@@ -337,6 +338,55 @@ export default async function SettingsPage() {
             </tr>
           ))}
         </Table>
+      </Card>
+
+      <Card
+        title="إعدادات واتساب"
+        className="mt-5 p-5 pt-4"
+        action={<span className="text-xs text-slate-400 flex items-center gap-1.5"><MessageCircle className="w-3.5 h-3.5" />التنبيهات التلقائية</span>}
+      >
+        <form action={saveWhatsappSettings} className="space-y-3">
+          <Field label="طريقة الإرسال">
+            <Select name="waProvider" defaultValue={club.waProvider}>
+              <option value="link">رابط يدوي — يعمل فوراً بلا إعداد</option>
+              <option value="cloud_api">إرسال تلقائي — WhatsApp Business API</option>
+            </Select>
+          </Field>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label="معرّف رقم واتساب (Phone Number ID)">
+              <Input name="waPhoneId" defaultValue={club.waPhoneId ?? ""} dir="ltr" className="text-right" placeholder="1234567890" />
+            </Field>
+            <Field label="مفتاح الوصول (Access Token)">
+              <Input name="waToken" type="password" defaultValue={club.waToken ?? ""} dir="ltr" className="text-right" placeholder="EAAG…" />
+            </Field>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-2">
+            {[
+              ["waAutoWelcome", "ترحيب بالعضو الجديد", club.waAutoWelcome],
+              ["waAutoReceipt", "إيصال بعد كل عملية بيع", club.waAutoReceipt],
+              ["waAutoExpiry", "تذكير قبل انتهاء الاشتراك", club.waAutoExpiry],
+              ["waAutoWinback", "استرجاع المنقطعين", club.waAutoWinback],
+            ].map(([key, label, checked]) => (
+              <label key={String(key)} className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 cursor-pointer hover:border-emerald-300 transition">
+                <input type="checkbox" name={String(key)} defaultChecked={Boolean(checked)} className="w-4 h-4 accent-emerald-600" />
+                <span className="text-sm font-medium text-slate-700">{label}</span>
+              </label>
+            ))}
+          </div>
+
+          <Field label="التذكير قبل الانتهاء بـ (أيام)">
+            <Input name="waExpiryDays" type="number" min="1" max="30" defaultValue={club.waExpiryDays} />
+          </Field>
+
+          <Submit>حفظ إعدادات واتساب</Submit>
+        </form>
+
+        <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100 leading-relaxed">
+          الإرسال التلقائي يتطلب حساب WhatsApp Business معتمداً من Meta ورقماً مسجلاً وقوالب
+          موافَقاً عليها. بدونه يعمل وضع الرابط اليدوي بكامل كفاءته.
+        </p>
       </Card>
 
       <Card

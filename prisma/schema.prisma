@@ -35,6 +35,16 @@ model Club {
   blockExpiredEntry  Boolean @default(true)
   lastBackupAt       DateTime?
 
+  // إعدادات واتساب
+  waProvider    String  @default("link") // link = رابط يدوي | cloud_api = إرسال تلقائي
+  waPhoneId     String? // معرّف رقم الواتساب في Meta
+  waToken       String? // مفتاح الوصول
+  waAutoWelcome Boolean @default(true)
+  waAutoExpiry  Boolean @default(true)
+  waExpiryDays  Int     @default(3)
+  waAutoWinback Boolean @default(true)
+  waAutoReceipt Boolean @default(true)
+
   // الموقع الجغرافي — للتحقق من حضور الموظفين داخل النطاق
   latitude        Float?
   longitude       Float?
@@ -52,6 +62,10 @@ model Club {
   apiKeys          ApiKey[]
   accounts         Account[]
   journalEntries   JournalEntry[]
+  products         Product[]
+  templates        MessageTemplate[]
+  messages         Message[]
+  leads            Lead[]
   platformInvoices PlatformInvoice[]
 }
 
@@ -135,6 +149,7 @@ model Member {
   attendance    Attendance[]
   bookings      Booking[]
   invoices      Invoice[]
+  messages      Message[]
 
   @@unique([clubId, memberNo])
   @@index([clubId, name])
@@ -184,6 +199,85 @@ model Attendance {
   source    String   @default("reception") // reception | fingerprint | wristband | gate
 
   @@index([memberId, checkedAt])
+}
+
+// ───────── المنتجات ونقطة البيع ─────────
+
+model Product {
+  id         String  @id @default(cuid())
+  clubId     String
+  club       Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  name       String
+  sku        String?
+  category   String  @default("مكملات") // مكملات | ملابس | مشروبات | خدمات | أخرى
+  priceSAR   Float // شامل الضريبة
+  costSAR    Float   @default(0)
+  stock      Int     @default(0)
+  trackStock Boolean @default(true)
+  active     Boolean @default(true)
+  createdAt  DateTime @default(now())
+
+  items InvoiceItem[]
+
+  @@index([clubId, active])
+}
+
+// ───────── التواصل: قوالب ورسائل واتساب ─────────
+
+model MessageTemplate {
+  id        String  @id @default(cuid())
+  clubId    String
+  club      Club    @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  key       String // welcome | expiry | post_sale | winback | receipt | custom
+  name      String
+  body      String // يدعم متغيرات مثل {الاسم} و{الباقة}
+  active    Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  messages Message[]
+
+  @@unique([clubId, key])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  clubId     String
+  club       Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  memberId   String?
+  member     Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  templateId String?
+  template   MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  toName     String
+  phone      String
+  body       String
+  kind       String // welcome | expiry | post_sale | winback | receipt | manual
+  status     String   @default("pending") // pending | sent | failed
+  provider   String   @default("link") // link | cloud_api
+  sentAt     DateTime?
+  sentBy     String?
+  error      String?
+  createdAt  DateTime @default(now())
+
+  @@index([clubId, status])
+  @@index([clubId, createdAt])
+}
+
+// ───────── العملاء المحتملون والمتابعة ─────────
+
+model Lead {
+  id         String   @id @default(cuid())
+  clubId     String
+  club       Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  name       String
+  phone      String
+  source     String   @default("زيارة") // زيارة | اتصال | إنستقرام | توصية | أخرى
+  status     String   @default("new") // new | contacted | trial | converted | lost
+  note       String?
+  followUpAt DateTime?
+  handledBy  String?
+  createdAt  DateTime @default(now())
+
+  @@index([clubId, status])
 }
 
 // ───────── العروض والخصومات ─────────
@@ -338,9 +432,11 @@ model Invoice {
 }
 
 model InvoiceItem {
-  id           String  @id @default(cuid())
+  id           String   @id @default(cuid())
   invoiceId    String
-  invoice      Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoice      Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  productId    String?
+  product      Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   description  String
   qty          Int     @default(1)
   unitPriceSAR Float
