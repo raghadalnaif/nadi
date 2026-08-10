@@ -35,6 +35,12 @@ model Club {
   blockExpiredEntry  Boolean @default(true)
   lastBackupAt       DateTime?
 
+  // الموقع الجغرافي — للتحقق من حضور الموظفين داخل النطاق
+  latitude        Float?
+  longitude       Float?
+  geofenceMeters  Int     @default(150)
+  requireGeoStaff Boolean @default(false)
+
   users            User[]
   members          Member[]
   plans            Plan[]
@@ -370,12 +376,32 @@ model Employee {
   name       String
   jobTitle   String
   department String // إدارة | تدريب | استقبال | صيانة | محاسبة
-  salarySAR  Float
+  salarySAR  Float // الراتب الأساسي
   phone      String
   iban       String?
   barcode    String?  @unique
   hireDate   DateTime
   status     String   @default("active") // active | on_leave | terminated
+
+  // بيانات التوظيف
+  nationalId     String? // الهوية أو الإقامة
+  nationality    String    @default("سعودي")
+  contractType   String    @default("full_time") // full_time | part_time | temporary
+  contractEndsAt DateTime?
+  idExpiresAt    DateTime? // انتهاء الإقامة أو الهوية
+
+  // هيكل الراتب — بدلات
+  housingSAR    Float @default(0)
+  transportSAR  Float @default(0)
+  otherAllowSAR Float @default(0)
+
+  // التأمينات الاجتماعية
+  gosiSubject Boolean @default(true)
+
+  // الدوام والإجازات
+  shiftStart      String @default("08:00")
+  shiftEnd        String @default("17:00")
+  annualLeaveDays Int    @default(21)
 
   leaves   Leave[]
   payrolls Payroll[]
@@ -399,8 +425,17 @@ model Payroll {
   employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   month         String // YYYY-MM
   baseSAR       Float
+  housingSAR    Float     @default(0)
+  transportSAR  Float     @default(0)
+  otherAllowSAR Float     @default(0)
+  overtimeSAR   Float     @default(0)
   bonusSAR      Float     @default(0)
+  absenceSAR    Float     @default(0) // خصم الغياب
+  gosiEmpSAR    Float     @default(0) // حصة الموظف من التأمينات
+  gosiClubSAR   Float     @default(0) // حصة المنشأة
   deductionsSAR Float     @default(0)
+  workedDays    Int       @default(0)
+  absentDays    Int       @default(0)
   netSAR        Float
   status        String    @default("pending") // pending | paid
   paidAt        DateTime?
@@ -416,6 +451,21 @@ model StaffAttendance {
   checkIn    DateTime?
   checkOut   DateTime?
   status     String    @default("present") // present | absent | leave
+
+  // طريقة التسجيل والموقع
+  method           String  @default("manual") // manual | barcode | kiosk
+  checkInLat       Float?
+  checkInLng       Float?
+  checkInMeters    Float? // المسافة عن النادي
+  checkOutLat      Float?
+  checkOutLng      Float?
+  checkOutMeters   Float?
+  outsideGeofence  Boolean @default(false)
+
+  // الانضباط — تُحسب من وقت الدوام
+  lateMinutes      Int @default(0)
+  earlyLeaveMinutes Int @default(0)
+  overtimeMinutes  Int @default(0) // present | absent | leave
 
   @@unique([employeeId, day])
 }

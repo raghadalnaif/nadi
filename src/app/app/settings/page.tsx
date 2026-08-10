@@ -1,4 +1,4 @@
-import { Building2, DatabaseBackup, Download, Fingerprint, KeyRound, Pencil, Plug, Power, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { Building2, DatabaseBackup, Download, Fingerprint, KeyRound, MapPin, Pencil, Plug, Power, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { db } from "@/lib/db";
 import { MODULE_ACCESS, ROLES, requireModule, type Role } from "@/lib/auth";
 import { ACTION_LABEL } from "@/lib/audit";
@@ -16,6 +16,7 @@ import {
 import { cookies } from "next/headers";
 import { createApiKey, deleteApiKey, saveCheckinSettings, takeBackup, toggleApiKey } from "../ops-actions";
 import { listBackups } from "@/lib/backup";
+import { saveClubLocation } from "../hr/actions";
 
 const CHECKIN_METHODS = [
   { key: "checkinManual", label: "تحضير يدوي من الاستقبال", hint: "الموظف يبحث ويضغط تحضير" },
@@ -336,6 +337,42 @@ export default async function SettingsPage() {
             </tr>
           ))}
         </Table>
+      </Card>
+
+      <Card
+        title="موقع النادي ونطاق حضور الموظفين"
+        className="mt-5 p-5 pt-4"
+        action={<span className="text-xs text-slate-400 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5" />للتحقق الجغرافي</span>}
+      >
+        <form action={saveClubLocation} className="space-y-3">
+          <div className="grid sm:grid-cols-3 gap-3">
+            <Field label="خط العرض (Latitude)">
+              <Input name="latitude" type="number" step="0.000001" defaultValue={club.latitude ?? ""} dir="ltr" className="text-right" placeholder="24.774265" />
+            </Field>
+            <Field label="خط الطول (Longitude)">
+              <Input name="longitude" type="number" step="0.000001" defaultValue={club.longitude ?? ""} dir="ltr" className="text-right" placeholder="46.738586" />
+            </Field>
+            <Field label="النطاق المسموح (متر)">
+              <Input name="geofenceMeters" type="number" min="20" max="2000" step="10" defaultValue={club.geofenceMeters} />
+            </Field>
+          </div>
+
+          <label className="flex items-start gap-3 rounded-xl bg-amber-50 ring-1 ring-amber-100 px-4 py-3 cursor-pointer">
+            <input type="checkbox" name="requireGeoStaff" defaultChecked={club.requireGeoStaff} className="mt-0.5 w-4 h-4 accent-amber-600" />
+            <span className="flex-1">
+              <span className="block text-sm font-bold text-amber-900">إلزام التحقق الجغرافي</span>
+              <span className="block text-xs text-amber-700 mt-0.5">
+                يُرفض تسجيل الحضور من خارج النطاق — بدونه يُسجَّل الحضور مع تنبيه فقط
+              </span>
+            </span>
+          </label>
+
+          <Submit>حفظ الموقع</Submit>
+        </form>
+
+        <p className="text-xs text-slate-400 mt-3 pt-3 border-t border-slate-100 leading-relaxed">
+          لمعرفة إحداثيات ناديك: افتح خرائط قوقل، اضغط مطولاً على موقع النادي، وانسخ الرقمين الظاهرين.
+        </p>
       </Card>
 
       <Card

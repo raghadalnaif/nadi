@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarOff, CalendarPlus, Check, CircleDollarSign, LogIn, LogOut, Pencil, Plus, Trash2, UserPlus, UserX, Users, X } from "lucide-react";
+import { BriefcaseBusiness, CalendarOff, CalendarPlus, Check, CircleDollarSign, LogIn, LogOut, Pencil, Plus, ScanLine, Trash2, UserPlus, UserX, Users, X } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { Badge, Card, Empty, PageHeader, StatCard, Table, Td, Th, fullDate, num, sar } from "@/lib/ui";
@@ -7,6 +7,8 @@ import { Field, Input, Select, Submit } from "@/components/form";
 import { decideLeave, payPayroll } from "../actions";
 import { addLeave, deleteEmployee, generatePayroll, saveEmployee } from "../manage-actions";
 import { markStaffAbsent, staffCheckIn, staffCheckOut } from "../ops-actions";
+import { generatePayrollPro } from "./actions";
+import Link from "next/link";
 
 const departments = ["إدارة", "تدريب", "استقبال", "محاسبة", "صيانة"];
 
@@ -82,8 +84,16 @@ export default async function HrPage() {
               </form>
             </Dialog>
 
-            <Dialog label="مسير رواتب" title="إنشاء مسير رواتب" description="يُنشأ لكل الموظفين على رأس العمل" variant="ghost" icon={<Plus className="w-4 h-4" />}>
-              <form action={generatePayroll} className="space-y-3">
+            <Link
+              href="/app/hr/kiosk"
+              className="h-9 px-3.5 rounded-xl bg-slate-900 text-white text-sm font-bold flex items-center gap-1.5 hover:bg-slate-800 transition whitespace-nowrap"
+            >
+              <ScanLine className="w-4 h-4" />
+              نقطة الحضور
+            </Link>
+
+            <Dialog label="مسير رواتب" title="إنشاء مسير رواتب" description="يُحسب من الحضور الفعلي والبدلات والتأمينات" variant="ghost" icon={<Plus className="w-4 h-4" />}>
+              <form action={generatePayrollPro} className="space-y-3">
                 <Field label="الشهر">
                   <Input name="month" defaultValue={thisMonth} placeholder="2026-08" dir="ltr" className="text-right" required />
                 </Field>
@@ -205,7 +215,9 @@ export default async function HrPage() {
             {employees.map((e) => (
               <tr key={e.id} className="hover:bg-slate-50/60 transition">
                 <Td>
-                  <p className="font-bold">{e.name}</p>
+                  <Link href={`/app/hr/${e.id}`} className="font-bold hover:text-emerald-700 transition">
+                    {e.name}
+                  </Link>
                   <p className="text-xs text-slate-400">{e.jobTitle}</p>
                 </Td>
                 <Td className="text-slate-600">{e.department}</Td>
