@@ -52,7 +52,7 @@ export default async function AppLayout({ children }: LayoutProps<"/app">) {
           </span>
           <div className="min-w-0">
             <p className="font-extrabold text-slate-900 leading-tight truncate">{user.club?.name}</p>
-            <p className="text-[11px] text-slate-400 leading-tight">منصة نادي</p>
+            <p className="text-[11px] text-slate-400 leading-tight">URGYM</p>
           </div>
         </div>
 

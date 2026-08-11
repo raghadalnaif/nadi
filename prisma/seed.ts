@@ -352,9 +352,106 @@ async function main() {
     data: { name: "مالك أكاديمية النخبة", email: "owner@elite.sa", passwordHash: pw, role: "owner", clubId: clubC.id },
   });
 
+  // ───── فروع النادي الأول وتوزيع بياناته ─────
+  const mainBranch = await db.branch.create({
+    data: { clubId: clubA.id, name: "فرع الملقا (الرئيسي)", address: "الرياض، حي الملقا", phone: "0114567890", isMain: true },
+  });
+  const secondBranch = await db.branch.create({
+    data: { clubId: clubA.id, name: "فرع النرجس", address: "الرياض، حي النرجس", phone: "0114567891" },
+  });
+
+  const allMembers = await db.member.findMany({ where: { clubId: clubA.id } });
+  for (const [i, m] of allMembers.entries()) {
+    await db.member.update({
+      where: { id: m.id },
+      data: { branchId: i % 3 === 0 ? secondBranch.id : mainBranch.id },
+    });
+  }
+
+  const allEmployees = await db.employee.findMany({ where: { clubId: clubA.id } });
+  for (const [i, e] of allEmployees.entries()) {
+    await db.employee.update({
+      where: { id: e.id },
+      data: { branchId: i % 3 === 0 ? secondBranch.id : mainBranch.id },
+    });
+  }
+
+  // الفواتير تتبع فرع صاحبها ليصح تقرير كل فرع
+  const clubAInvoices = await db.invoice.findMany({ where: { clubId: clubA.id }, select: { id: true, memberId: true } });
+  for (const inv of clubAInvoices) {
+    const owner = inv.memberId ? await db.member.findUnique({ where: { id: inv.memberId }, select: { branchId: true } }) : null;
+    await db.invoice.update({ where: { id: inv.id }, data: { branchId: owner?.branchId ?? mainBranch.id } });
+  }
+  await db.expense.updateMany({ where: { clubId: clubA.id }, data: { branchId: mainBranch.id } });
+  await db.gymClass.updateMany({ where: { clubId: clubA.id }, data: { branchId: mainBranch.id } });
+
+  // ───── حساب مدير الفرع ─────
+  await db.user.create({
+    data: {
+      clubId: clubA.id, branchId: secondBranch.id, name: "سعود العتيبي",
+      email: "branch@club.sa", role: "branch_manager", passwordHash: pw,
+    },
+  });
+
+  // ───── حساب موظف مع طلب إجازة وتقييم ─────
+  const coach = await db.employee.findFirst({ where: { clubId: clubA.id, department: "تدريب" } });
+  if (coach) {
+    await db.user.create({
+      data: {
+        clubId: clubA.id, branchId: coach.branchId, employeeId: coach.id,
+        name: coach.name, email: "staff@club.sa", role: "employee", passwordHash: pw,
+      },
+    });
+    await db.leave.create({
+      data: {
+        employeeId: coach.id, type: "سنوية", startsAt: shift(10), endsAt: shift(15),
+        status: "pending", requestedBy: coach.name, note: "سفر عائلي",
+      },
+    });
+    await db.evaluation.create({
+      data: {
+        employeeId: coach.id, year: new Date().getFullYear(),
+        attendance: 4, performance: 5, teamwork: 4, discipline: 5, overall: 4.5,
+        notes: "أداء ممتاز والتزام عالٍ بالمواعيد", byName: "منى الفارس",
+      },
+    });
+  }
+
+  // ───── حساب مشترك للبوابة ─────
+  const firstMember = await db.member.findFirst({ where: { clubId: clubA.id } });
+  if (firstMember) {
+    await db.user.create({
+      data: {
+        clubId: clubA.id, branchId: firstMember.branchId, memberId: firstMember.id,
+        name: firstMember.name, email: "member@club.sa", role: "member", passwordHash: pw,
+      },
+    });
+  }
+
+  // ───── إعلانات داخلية ─────
+  const ownerUser = await db.user.findFirst({ where: { clubId: clubA.id, role: "owner" } });
+  if (ownerUser) {
+    await db.announcement.create({
+      data: {
+        clubId: clubA.id, title: "تعديل مواعيد الدوام في رمضان",
+        body: "يبدأ الدوام الساعة ١٠ صباحاً وينتهي ٤ عصراً طوال الشهر الكريم.\n\nنرجو الالتزام وإبلاغ العملاء بالمواعيد الجديدة.",
+        kind: "letter", audience: "all", authorId: ownerUser.id, authorName: ownerUser.name, pinned: true,
+      },
+    });
+    await db.announcement.create({
+      data: {
+        clubId: clubA.id, title: "حملة تسويقية جديدة",
+        body: "أطلقنا عرض الصيف بخصم ٢٥٪ — عرّفوا العملاء عليه عند الاستقبال.",
+        kind: "announcement", audience: "all", authorId: ownerUser.id, authorName: ownerUser.name,
+      },
+    });
+  }
+
   console.log("✓ تم إنشاء البيانات التجريبية");
   console.log("  مزود الحل: admin@nadi.sa / 123456");
   console.log("  فريق النادي: owner@club.sa | manager@club.sa | accountant@club.sa | hr@club.sa | reception@club.sa");
+  console.log("  مدير فرع: branch@club.sa | موظف: staff@club.sa | مشترك: member@club.sa");
+  console.log("  دخول المشترك بالجوال: " + (firstMember?.phone ?? "—") + " عبر /portal/login");
 }
 
 main()

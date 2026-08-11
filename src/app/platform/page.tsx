@@ -49,7 +49,7 @@ export default async function PlatformPage() {
             <Building2 className="w-5 h-5 text-white" />
           </span>
           <div>
-            <p className="font-extrabold text-slate-900 leading-tight">لوحة مزود الحل</p>
+            <p className="font-extrabold text-slate-900 leading-tight">URGYM — لوحة مزود الحل</p>
             <p className="text-xs text-slate-400">{user.name}</p>
           </div>
         </div>

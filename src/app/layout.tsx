@@ -9,7 +9,7 @@ const tajawal = Tajawal({
 });
 
 export const metadata: Metadata = {
-  title: "نادي — منصة إدارة الأندية",
+  title: "URGYM — منصة إدارة الأندية",
   description: "منصة متكاملة لإدارة الأندية الرياضية: اشتراكات، حجوزات، محاسبة، وموارد بشرية",
 };
 

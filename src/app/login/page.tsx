@@ -31,7 +31,7 @@ export default async function LoginPage() {
             <span className="w-10 h-10 rounded-xl bg-emerald-600 grid place-items-center">
               <Dumbbell className="w-5 h-5 text-white" />
             </span>
-            <span className="text-xl font-extrabold text-slate-900">نادي</span>
+            <span className="text-xl font-extrabold text-slate-900">URGYM</span>
           </div>
 
           <h1 className="text-2xl font-extrabold text-slate-900">أهلاً بك مجدداً</h1>
