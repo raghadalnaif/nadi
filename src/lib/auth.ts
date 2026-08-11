@@ -3,6 +3,14 @@ import { redirect } from "next/navigation";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { db } from "./db";
 
+// في الإنتاج لا نسمح بمفتاح افتراضي — جلسات موقّعة بمفتاح معروف تعني
+// أن أي شخص يستطيع انتحال أي مستخدم.
+if (process.env.NODE_ENV === "production" && !process.env.AUTH_SECRET) {
+  throw new Error(
+    "AUTH_SECRET غير مضبوط. ولّده بالأمر: openssl rand -base64 32 وأضفه لمتغيرات البيئة."
+  );
+}
+
 const SECRET = process.env.AUTH_SECRET ?? "nadi-dev-secret-change-in-production";
 const COOKIE = "nadi_session";
 
