@@ -17,3 +17,37 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/* الطباعة: التقرير وحده على ورق A4 بلا قوائم أو ألوان خلفية */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm 12mm;
+  }
+
+  body {
+    background: #fff;
+  }
+
+  /* إخفاء القائمة الجانبية وكل ما وُسم print:hidden */
+  aside,
+  .print\:hidden {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+
+  /* منع قطع الجداول والأقسام بين الصفحات */
+  section,
+  table,
+  tr {
+    break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+}

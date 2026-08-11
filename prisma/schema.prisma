@@ -201,6 +201,22 @@ model ApiKey {
   @@index([clubId, active])
 }
 
+// رمز دخول مؤقت للعضو — يُرسل لجواله بدل كلمة مرور دائمة
+model OtpCode {
+  id        String    @id @default(cuid())
+  clubId    String
+  phone     String // بصيغة دولية موحّدة
+  codeHash  String // لا نخزّن الرمز نفسه
+  purpose   String    @default("member_login")
+  expiresAt DateTime
+  attempts  Int       @default(0)
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([phone, expiresAt])
+  @@index([clubId, createdAt])
+}
+
 // سجل التدقيق — من فعل ماذا ومتى. أساسي في نظام فيه أموال.
 model AuditLog {
   id       String   @id @default(cuid())

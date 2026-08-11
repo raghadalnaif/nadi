@@ -7,6 +7,7 @@ const TABS = [
   { href: "/app/accounting/statements", label: "القوائم المالية" },
   { href: "/app/accounting/vat", label: "الإقرار الضريبي" },
   { href: "/app/accounting/receivables", label: "أعمار الذمم" },
+  { href: "/app/accounting/print", label: "طباعة التقارير" },
 ];
 
 export function AccountingTabs({ active }: { active: string }) {

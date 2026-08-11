@@ -41,6 +41,13 @@ export default async function LoginPage() {
 
           <LoginForm />
 
+          <a
+            href="/portal/login"
+            className="mt-6 flex items-center justify-center gap-2 h-12 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:border-emerald-300 hover:text-emerald-700 transition"
+          >
+            هل أنت مشترك؟ ادخل برقم جوالك
+          </a>
+
           <div className="mt-8 pt-6 border-t border-slate-100">
             <p className="text-xs text-slate-400 mb-3">حسابات تجريبية — كلمة المرور للجميع 123456</p>
             <div className="flex flex-wrap gap-1.5">

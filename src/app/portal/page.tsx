@@ -22,8 +22,8 @@ const dayLabel = new Intl.DateTimeFormat("ar-SA", { weekday: "long", day: "numer
 
 export default async function PortalPage() {
   const user = await getCurrentUser();
-  if (!user) redirect("/login");
-  if (!user.memberId) redirect("/login");
+  if (!user) redirect("/portal/login");
+  if (!user.memberId) redirect("/portal/login");
 
   const member = await db.member.findUnique({
     where: { id: user.memberId },
