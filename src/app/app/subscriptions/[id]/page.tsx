@@ -4,6 +4,7 @@ import {
   ArrowRight,
   CalendarCheck,
   MessageCircle,
+  KeyRound,
   Pencil,
   RefreshCw,
   Trash2,
@@ -32,6 +33,7 @@ import { ConfirmButton, Dialog } from "@/components/dialog";
 import { Field, Input, Select, Submit } from "@/components/form";
 import { renew } from "../../actions";
 import { cancelSubscription, deleteMember, updateMember } from "../../manage-actions";
+import { createMemberAccount } from "@/app/portal/actions";
 
 export default async function MemberPage({ params }: PageProps<"/app/subscriptions/[id]">) {
   const user = await requireModule("subscriptions");
@@ -96,6 +98,19 @@ export default async function MemberPage({ params }: PageProps<"/app/subscriptio
                 تجديد
               </button>
             </form>
+
+            <Dialog label="حساب البوابة" title={`حساب بوابة ${member.name}`} description="يدخل المشترك برقم جواله ويرى اشتراكه ويحجز حصصه" variant="ghost" icon={<KeyRound className="w-4 h-4" />}>
+              <form action={createMemberAccount} className="space-y-3">
+                <input type="hidden" name="memberId" value={member.id} />
+                <div className="rounded-xl bg-sky-50 ring-1 ring-sky-100 px-4 py-3 text-sm text-sky-800">
+                  اسم الدخول: <b dir="ltr">{member.phone.replace(/\D/g, "")}@member.local</b>
+                </div>
+                <Field label="كلمة المرور">
+                  <Input name="password" defaultValue="123456" dir="ltr" className="text-right" required />
+                </Field>
+                <Submit>إنشاء الحساب أو تصفير كلمة المرور</Submit>
+              </form>
+            </Dialog>
 
             <Dialog label="تعديل" title="تعديل بيانات العضو" variant="ghost" icon={<Pencil className="w-4 h-4" />}>
               <form action={updateMember} className="space-y-3">

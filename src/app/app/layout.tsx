@@ -9,6 +9,7 @@ const ALL_ITEMS: NavItem[] = [
   { key: "dashboard", href: "/app/dashboard", label: "لوحة الإدارة" },
   { key: "reception", href: "/app/reception", label: "الاستقبال" },
   { key: "pos", href: "/app/pos", label: "الكاشير" },
+  { key: "shifts", href: "/app/shifts", label: "الورديات والصندوق" },
   { key: "subscriptions", href: "/app/subscriptions", label: "الاشتراكات" },
   { key: "leads", href: "/app/leads", label: "العملاء المحتملون" },
   { key: "messages", href: "/app/messages", label: "رسائل واتساب" },
@@ -18,6 +19,8 @@ const ALL_ITEMS: NavItem[] = [
   { key: "accounting", href: "/app/accounting", label: "المحاسبة" },
   { key: "reports", href: "/app/reports", label: "التقارير" },
   { key: "hr", href: "/app/hr", label: "الموارد البشرية" },
+  { key: "board", href: "/app/board", label: "الإعلانات والخطابات" },
+  { key: "branches", href: "/app/branches", label: "الفروع" },
   { key: "settings", href: "/app/settings", label: "الإعدادات" },
 ];
 

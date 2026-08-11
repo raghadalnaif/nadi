@@ -66,7 +66,108 @@ model Club {
   templates        MessageTemplate[]
   messages         Message[]
   leads            Lead[]
+  branches         Branch[]
+  shifts           CashShift[]
+  announcements    Announcement[]
   platformInvoices PlatformInvoice[]
+}
+
+// فرع النادي — كل فرع بمشتركيه ودخله وحساباته
+model Branch {
+  id        String   @id @default(cuid())
+  clubId    String
+  club      Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  name      String
+  address   String?
+  phone     String?
+  isMain    Boolean  @default(false)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  users     User[]
+  members   Member[]
+  employees Employee[]
+  invoices  Invoice[]
+  expenses  Expense[]
+  classes   GymClass[]
+  shifts    CashShift[]
+
+  @@index([clubId, active])
+}
+
+// وردية الكاشير — فتح وتقفيل الصندوق
+model CashShift {
+  id              String    @id @default(cuid())
+  clubId          String
+  club            Club      @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  branchId        String?
+  branch          Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  userId          String
+  userName        String
+  openedAt        DateTime  @default(now())
+  closedAt        DateTime?
+  openingFloatSAR Float     @default(0) // العهدة الافتتاحية
+  countedCashSAR  Float     @default(0) // النقد المعدود عند الإقفال
+  expectedCashSAR Float     @default(0) // المتوقع من النظام
+  varianceSAR     Float     @default(0) // الفرق (زيادة أو عجز)
+  cardTotalSAR    Float     @default(0)
+  otherTotalSAR   Float     @default(0)
+  invoiceCount    Int       @default(0)
+  note            String?
+  status          String    @default("open") // open | closed
+
+  @@index([clubId, status])
+  @@index([clubId, openedAt])
+}
+
+// إعلان أو خطاب داخلي بين الإدارة والموظفين
+model Announcement {
+  id         String   @id @default(cuid())
+  clubId     String
+  club       Club     @relation(fields: [clubId], references: [id], onDelete: Cascade)
+  branchId   String?
+  title      String
+  body       String
+  kind       String   @default("announcement") // announcement | letter | policy
+  audience   String   @default("all") // all | managers | department
+  department String?
+  authorId   String
+  authorName String
+  pinned     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  reads AnnouncementRead[]
+
+  @@index([clubId, createdAt])
+}
+
+model AnnouncementRead {
+  id             String       @id @default(cuid())
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  userName       String
+  readAt         DateTime     @default(now())
+
+  @@unique([announcementId, userId])
+}
+
+// التقييم السنوي للموظف
+model Evaluation {
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  year        Int
+  attendance  Int      @default(3) // 1-5
+  performance Int      @default(3)
+  teamwork    Int      @default(3)
+  discipline  Int      @default(3)
+  overall     Float    @default(3)
+  notes       String?
+  byName      String
+  createdAt   DateTime @default(now())
+
+  @@unique([employeeId, year])
 }
 
 // فاتورة اشتراك النادي في المنصة (إيرادنا نحن)
@@ -122,6 +223,10 @@ model User {
   id           String   @id @default(cuid())
   clubId       String?
   club         Club?    @relation(fields: [clubId], references: [id])
+  branchId     String? // مدير الفرع مقيّد بفرعه
+  branch       Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  memberId     String?  @unique // حساب المشترك
+  employeeId   String?  @unique // حساب الموظف
   name         String
   email        String   @unique
   passwordHash String
@@ -141,6 +246,8 @@ model Member {
   phone     String
   memberNo  Int
   gender    String   @default("male")
+  branchId  String?
+  branch    Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
   barcode   String?  @unique
   notes     String?
   createdAt DateTime @default(now())
@@ -307,9 +414,11 @@ model Offer {
 // ───────── الحصص والحجوزات ─────────
 
 model GymClass {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   clubId      String
-  club        Club   @relation(fields: [clubId], references: [id])
+  club        Club    @relation(fields: [clubId], references: [id])
+  branchId    String?
+  branch      Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
   name        String
   coach       String
   durationMin Int
@@ -400,6 +509,8 @@ model Invoice {
   id             String   @id @default(cuid())
   clubId         String
   club           Club     @relation(fields: [clubId], references: [id])
+  branchId       String?
+  branch         Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
   memberId       String?
   member         Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull)
   subscriptionId String?
@@ -455,6 +566,8 @@ model Expense {
   id          String   @id @default(cuid())
   clubId      String
   club        Club     @relation(fields: [clubId], references: [id])
+  branchId    String?
+  branch      Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
   category    String // رواتب | إيجار | صيانة | تسويق | مرافق | أخرى
   description String
   amountSAR   Float
@@ -478,6 +591,8 @@ model Employee {
   barcode    String?  @unique
   hireDate   DateTime
   status     String   @default("active") // active | on_leave | terminated
+  branchId   String?
+  branch     Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
 
   // بيانات التوظيف
   nationalId     String? // الهوية أو الإقامة
@@ -499,9 +614,10 @@ model Employee {
   shiftEnd        String @default("17:00")
   annualLeaveDays Int    @default(21)
 
-  leaves   Leave[]
-  payrolls Payroll[]
-  shifts   StaffAttendance[]
+  leaves      Leave[]
+  payrolls    Payroll[]
+  shifts      StaffAttendance[]
+  evaluations Evaluation[]
 }
 
 model Leave {
@@ -511,8 +627,13 @@ model Leave {
   type       String // سنوية | مرضية | اضطرارية | بدون راتب
   startsAt   DateTime
   endsAt     DateTime
-  status     String   @default("pending") // pending | approved | rejected
-  note       String?
+  status      String   @default("pending") // pending | approved | rejected
+  note        String?
+  requestedBy String? // إن قدّمها الموظف بنفسه
+  decidedBy   String?
+  decidedAt   DateTime?
+  decisionNote String?
+  createdAt   DateTime @default(now())
 }
 
 model Payroll {

@@ -243,6 +243,7 @@ export async function saveEmployee(formData: FormData) {
     const emp = await db.employee.create({
       data: {
         clubId: user.clubId!,
+        branchId: user.branchId,
         name,
         jobTitle,
         department: department || "إدارة",
@@ -250,8 +251,35 @@ export async function saveEmployee(formData: FormData) {
         phone,
         iban: str(formData, "iban") || null,
         hireDate: new Date(),
+        barcode: `E${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
       },
     });
+
+    // حساب دخول تلقائي للموظف — يرى ملفه وإجازاته وتقييمه
+    const email = str(formData, "email").toLowerCase() ||
+      `${phone.replace(/\D/g, "")}@staff.local`;
+    const taken = await db.user.findUnique({ where: { email } });
+    if (!taken) {
+      const account = await db.user.create({
+        data: {
+          clubId: user.clubId!,
+          branchId: user.branchId,
+          employeeId: emp.id,
+          name,
+          email,
+          role: "employee",
+          passwordHash: hashPassword(str(formData, "password") || "123456"),
+        },
+      });
+      await audit({
+        user,
+        action: "create",
+        entity: "user",
+        entityId: account.id,
+        summary: `إنشاء حساب دخول للموظف «${name}» (${email})`,
+      });
+    }
+
     await audit({ user, action: "create", entity: "employee", entityId: emp.id, summary: `إضافة الموظف «${name}» براتب ${salarySAR} ر.س` });
   }
 

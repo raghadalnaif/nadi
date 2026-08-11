@@ -9,6 +9,7 @@ import {
   Pencil,
   QrCode,
   ShieldCheck,
+  Star,
   TriangleAlert,
   Wallet,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import { Badge, Card, Empty, PageHeader, StatCard, Table, Td, Th, fullDate, num,
 import { Dialog } from "@/components/dialog";
 import { Field, Input, Select, Submit } from "@/components/form";
 import { generateEmployeeBarcode, saveEmployeeDetails } from "../actions";
+import { saveEvaluation } from "@/app/me/actions";
 
 const iso = (d?: Date | null) => (d ? d.toISOString().slice(0, 10) : "");
 
@@ -82,6 +84,29 @@ export default async function EmployeePage({ params }: PageProps<"/app/hr/[id]">
                 </button>
               </form>
             )}
+            <Dialog label="التقييم السنوي" title={`تقييم ${emp.name}`} variant="ghost" icon={<Star className="w-4 h-4" />}>
+              <form action={saveEvaluation} className="space-y-3">
+                <input type="hidden" name="employeeId" value={emp.id} />
+                <Field label="السنة">
+                  <Input name="year" type="number" defaultValue={new Date().getFullYear()} required />
+                </Field>
+                {[
+                  ["attendance", "الالتزام بالحضور"],
+                  ["performance", "الأداء الوظيفي"],
+                  ["teamwork", "العمل الجماعي"],
+                  ["discipline", "الانضباط"],
+                ].map(([name, label]) => (
+                  <Field key={name} label={`${label} (1-5)`}>
+                    <Input name={name} type="number" min="1" max="5" step="1" defaultValue={3} required />
+                  </Field>
+                ))}
+                <Field label="ملاحظات">
+                  <Input name="notes" placeholder="نقاط القوة وفرص التحسين" />
+                </Field>
+                <Submit>حفظ التقييم</Submit>
+              </form>
+            </Dialog>
+
             <Dialog label="بيانات التوظيف" title={`بيانات ${emp.name}`} icon={<Pencil className="w-4 h-4" />}>
               <form action={saveEmployeeDetails} className="space-y-3">
                 <input type="hidden" name="employeeId" value={emp.id} />

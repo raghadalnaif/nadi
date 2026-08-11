@@ -52,7 +52,10 @@ export async function getCurrentUser() {
   const [userId, issued, signature] = parts;
   if (sign(`${userId}.${issued}`) !== signature) return null;
 
-  const user = await db.user.findUnique({ where: { id: userId }, include: { club: true } });
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    include: { club: true, branch: true },
+  });
   if (!user || !user.active) return null;
   return user;
 }
@@ -62,28 +65,34 @@ export async function getCurrentUser() {
 export const ROLES = {
   super_admin: "مزود الحل",
   owner: "مالك النادي",
+  branch_manager: "مدير فرع",
   manager: "مدير",
   accountant: "محاسب",
   hr: "موارد بشرية",
   reception: "استقبال",
+  employee: "موظف",
+  member: "مشترك",
 } as const;
 
 export type Role = keyof typeof ROLES;
 
 // أي قسم يشوفه أي دور — مصدر الحقيقة الوحيد للصلاحيات
 export const MODULE_ACCESS: Record<string, Role[]> = {
-  dashboard: ["owner", "manager"],
-  reception: ["owner", "manager", "reception"],
-  subscriptions: ["owner", "manager", "reception", "accountant"],
-  schedule: ["owner", "manager", "reception"],
-  pos: ["owner", "manager", "reception"],
-  leads: ["owner", "manager", "reception"],
-  messages: ["owner", "manager", "reception"],
+  dashboard: ["owner", "branch_manager", "manager"],
+  branches: ["owner"], // إدارة الفروع للمالك وحده
+  reception: ["owner", "branch_manager", "manager", "reception"],
+  pos: ["owner", "branch_manager", "manager", "reception"],
+  shifts: ["owner", "branch_manager", "manager", "reception", "accountant"],
+  subscriptions: ["owner", "branch_manager", "manager", "reception", "accountant"],
+  leads: ["owner", "branch_manager", "manager", "reception"],
+  messages: ["owner", "branch_manager", "manager", "reception"],
+  schedule: ["owner", "branch_manager", "manager", "reception"],
   offers: ["owner", "manager", "accountant"],
-  invoices: ["owner", "accountant", "manager", "reception"],
+  invoices: ["owner", "branch_manager", "accountant", "manager", "reception"],
   accounting: ["owner", "accountant"],
-  reports: ["owner", "manager", "accountant"],
-  hr: ["owner", "hr", "manager"],
+  reports: ["owner", "branch_manager", "manager", "accountant"],
+  hr: ["owner", "branch_manager", "hr", "manager"],
+  board: ["owner", "branch_manager", "manager", "hr", "accountant", "reception"],
   settings: ["owner"],
 };
 
@@ -94,6 +103,8 @@ export function canAccess(role: string, moduleName: string) {
 // الصفحة الأولى المناسبة لكل دور بعد تسجيل الدخول
 export function homeFor(role: string) {
   if (role === "super_admin") return "/platform";
+  if (role === "member") return "/portal";
+  if (role === "employee") return "/me";
   if (role === "accountant") return "/app/accounting";
   if (role === "hr") return "/app/hr";
   if (role === "reception") return "/app/reception";
@@ -111,6 +122,8 @@ export async function requireUser() {
 export async function requireModule(moduleName: string) {
   const user = await requireUser();
   if (user.role === "super_admin") redirect("/platform");
+  if (user.role === "member") redirect("/portal");
+  if (user.role === "employee") redirect("/me");
   if (!user.clubId) redirect("/login");
   if (!canAccess(user.role, moduleName)) redirect(homeFor(user.role));
   return user;
@@ -120,4 +133,33 @@ export async function requireSuperAdmin() {
   const user = await requireUser();
   if (user.role !== "super_admin") redirect(homeFor(user.role));
   return user;
+}
+
+// بوابة المشترك
+export async function requireMember() {
+  const user = await requireUser();
+  if (user.role !== "member" || !user.memberId) redirect(homeFor(user.role));
+  return user;
+}
+
+// بوابة الموظف
+export async function requireEmployee() {
+  const user = await requireUser();
+  if (!user.employeeId) redirect(homeFor(user.role));
+  return user;
+}
+
+// ───────── نطاق الفرع ─────────
+// مدير الفرع يرى فرعه فقط؛ المالك يرى كل الفروع أو يفلتر باختياره.
+export function branchScope(
+  user: { role: string; branchId: string | null },
+  selected?: string | null
+) {
+  if (user.role === "branch_manager" && user.branchId) return user.branchId;
+  return selected && selected !== "all" ? selected : null;
+}
+
+// شرط Prisma للفلترة حسب الفرع
+export function branchWhere(branchId: string | null) {
+  return branchId ? { branchId } : {};
 }

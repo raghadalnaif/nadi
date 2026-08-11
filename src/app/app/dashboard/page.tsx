@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { ArrowUpLeft, BadgeCheck, CalendarCheck, TrendingUp, UsersRound, Wallet } from "lucide-react";
 import { db } from "@/lib/db";
-import { requireModule } from "@/lib/auth";
+import { branchScope, requireModule } from "@/lib/auth";
 import { Badge, Bar, Card, PageHeader, StatCard, Table, Td, Th, num, sar, shortDate, subStatus } from "@/lib/ui";
 
 export default async function DashboardPage() {
   const user = await requireModule("dashboard");
   const clubId = user.clubId!;
+  // مدير الفرع يرى أرقام فرعه فقط
+  const branchId = branchScope(user);
+  const inBranch = branchId ? { branchId } : {};
+  const memberInBranch = branchId ? { member: { clubId, branchId } } : { member: { clubId } };
 
   const now = new Date();
   const todayStart = new Date();
@@ -16,28 +20,28 @@ export default async function DashboardPage() {
 
   const [activeMembers, attendanceToday, monthInvoices, monthExpenses, expiring, recentMembers, lastYearAttendance] =
     await Promise.all([
-      db.subscription.count({ where: { status: "active", endsAt: { gte: now }, member: { clubId } } }),
-      db.attendance.count({ where: { checkedAt: { gte: todayStart }, member: { clubId } } }),
+      db.subscription.count({ where: { status: "active", endsAt: { gte: now }, ...memberInBranch } }),
+      db.attendance.count({ where: { checkedAt: { gte: todayStart }, ...memberInBranch } }),
       db.invoice.aggregate({
-        where: { clubId, issuedAt: { gte: monthStart }, status: "paid" },
+        where: { clubId, ...inBranch, issuedAt: { gte: monthStart }, status: "paid" },
         _sum: { totalSAR: true },
         _count: true,
       }),
-      db.expense.aggregate({ where: { clubId, spentAt: { gte: monthStart } }, _sum: { amountSAR: true } }),
+      db.expense.aggregate({ where: { clubId, ...inBranch, spentAt: { gte: monthStart } }, _sum: { amountSAR: true } }),
       db.subscription.findMany({
-        where: { status: "active", endsAt: { gte: now, lte: weekEnd }, member: { clubId } },
+        where: { status: "active", endsAt: { gte: now, lte: weekEnd }, ...memberInBranch },
         include: { member: true, plan: true },
         orderBy: { endsAt: "asc" },
         take: 6,
       }),
       db.member.findMany({
-        where: { clubId },
+        where: { clubId, ...inBranch },
         orderBy: { createdAt: "desc" },
         take: 5,
         include: { subscriptions: { orderBy: { endsAt: "desc" }, take: 1, include: { plan: true } } },
       }),
       db.attendance.findMany({
-        where: { member: { clubId }, checkedAt: { gte: new Date(Date.now() - 7 * 86400000) } },
+        where: { ...memberInBranch, checkedAt: { gte: new Date(Date.now() - 7 * 86400000) } },
         select: { checkedAt: true },
       }),
     ]);
@@ -62,7 +66,11 @@ export default async function DashboardPage() {
     <>
       <PageHeader
         title={`أهلاً، ${user.name.split(" ")[0]} 👋`}
-        subtitle="نظرة سريعة على أداء ناديك اليوم"
+        subtitle={
+          user.branchId && user.role === "branch_manager"
+            ? `نظرة على أداء ${user.branch?.name ?? "فرعك"} اليوم`
+            : "نظرة سريعة على أداء ناديك اليوم"
+        }
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">

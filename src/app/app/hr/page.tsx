@@ -4,7 +4,8 @@ import { requireModule } from "@/lib/auth";
 import { Badge, Card, Empty, PageHeader, StatCard, Table, Td, Th, fullDate, num, sar } from "@/lib/ui";
 import { ConfirmButton, Dialog } from "@/components/dialog";
 import { Field, Input, Select, Submit } from "@/components/form";
-import { decideLeave, payPayroll } from "../actions";
+import { payPayroll } from "../actions";
+import { decideLeaveRequest } from "@/app/me/actions";
 import { addLeave, deleteEmployee, generatePayroll, saveEmployee } from "../manage-actions";
 import { markStaffAbsent, staffCheckIn, staffCheckOut } from "../ops-actions";
 import { generatePayrollPro } from "./actions";
@@ -168,14 +169,20 @@ export default async function HrPage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-sm">
                     {l.employee.name} — إجازة {l.type}
+                    {l.requestedBy && <span className="text-xs text-slate-400 font-normal"> (طلب ذاتي)</span>}
                   </p>
                   <p className="text-xs text-slate-500 mt-0.5">
                     من {fullDate(l.startsAt)} إلى {fullDate(l.endsAt)}
                     {l.note && ` · ${l.note}`}
                   </p>
                 </div>
-                <form action={decideLeave} className="flex gap-2">
+                <form action={decideLeaveRequest} className="flex items-center gap-2">
                   <input type="hidden" name="leaveId" value={l.id} />
+                  <input
+                    name="decisionNote"
+                    placeholder="سبب القرار (اختياري)"
+                    className="h-9 w-44 bg-white border border-slate-200 rounded-lg px-3 text-xs outline-none focus:border-emerald-400"
+                  />
                   <button
                     name="decision"
                     value="approved"
