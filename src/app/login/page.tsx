@@ -1,15 +1,9 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { BarChart3, CalendarCheck, Dumbbell, ReceiptText, Users } from "lucide-react";
+import { ArrowRight, BarChart3, CalendarCheck, Dumbbell, ReceiptText, Users } from "lucide-react";
 import { getCurrentUser, homeFor } from "@/lib/auth";
 import { LoginForm } from "./login-form";
-
-const demoAccounts = [
-  { role: "مالك النادي", email: "owner@club.sa" },
-  { role: "محاسب", email: "accountant@club.sa" },
-  { role: "موارد بشرية", email: "hr@club.sa" },
-  { role: "استقبال", email: "reception@club.sa" },
-  { role: "مزود الحل", email: "admin@nadi.sa" },
-];
+import { DemoAccounts } from "./demo-accounts";
 
 const features = [
   { icon: Users, title: "اشتراكات وأعضاء", text: "تجديد، تجميد، وتنبيه قبل الانتهاء" },
@@ -26,13 +20,13 @@ export default async function LoginPage() {
     <div className="min-h-screen grid lg:grid-cols-2">
       {/* اليمين: نموذج الدخول */}
       <div className="flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-sm">
-          <div className="flex items-center gap-2.5 mb-8">
+        <div className="w-full max-w-md">
+          <Link href="/" className="flex items-center gap-2.5 mb-8">
             <span className="w-10 h-10 rounded-xl bg-emerald-600 grid place-items-center">
               <Dumbbell className="w-5 h-5 text-white" />
             </span>
             <span className="text-xl font-extrabold text-slate-900">URGYM</span>
-          </div>
+          </Link>
 
           <h1 className="text-2xl font-extrabold text-slate-900">أهلاً بك مجدداً</h1>
           <p className="text-sm text-slate-500 mt-1.5 mb-7">
@@ -41,27 +35,22 @@ export default async function LoginPage() {
 
           <LoginForm />
 
-          <a
+          <Link
             href="/portal/login"
-            className="mt-6 flex items-center justify-center gap-2 h-12 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:border-emerald-300 hover:text-emerald-700 transition"
+            className="mt-5 flex items-center justify-center gap-2 h-12 rounded-xl border border-slate-200 text-sm font-medium text-slate-600 hover:border-emerald-300 hover:text-emerald-700 transition"
           >
             هل أنت مشترك؟ ادخل برقم جوالك
-          </a>
+          </Link>
 
-          <div className="mt-8 pt-6 border-t border-slate-100">
-            <p className="text-xs text-slate-400 mb-3">حسابات تجريبية — كلمة المرور للجميع 123456</p>
-            <div className="flex flex-wrap gap-1.5">
-              {demoAccounts.map((a) => (
-                <span
-                  key={a.email}
-                  className="text-xs bg-slate-100 text-slate-600 rounded-lg px-2.5 py-1.5"
-                  title={a.email}
-                >
-                  {a.role}: <span dir="ltr" className="text-slate-500">{a.email}</span>
-                </span>
-              ))}
-            </div>
-          </div>
+          <DemoAccounts />
+
+          <Link
+            href="/"
+            className="mt-6 flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition"
+          >
+            <ArrowRight className="w-3.5 h-3.5" />
+            العودة للصفحة الرئيسية
+          </Link>
         </div>
       </div>
 
