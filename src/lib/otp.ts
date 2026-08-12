@@ -21,7 +21,7 @@ export type OtpRequestResult =
   | { ok: false; message: string };
 
 // يطلب رمزاً جديداً لرقم الجوال
-export async function requestOtp(phone: string): Promise<OtpRequestResult> {
+export async function requestOtp(phone: string, clubSlug?: string): Promise<OtpRequestResult> {
   const normalized = normalizePhone(phone);
   if (normalized.length < 12) {
     return { ok: false, message: "رقم الجوال غير صحيح" };
@@ -30,7 +30,11 @@ export async function requestOtp(phone: string): Promise<OtpRequestResult> {
   // نبحث عن العضو بأي صيغة مخزّنة للرقم
   const local = "0" + normalized.slice(3);
   const member = await db.member.findFirst({
-    where: { OR: [{ phone: normalized }, { phone: local }, { phone: local.slice(1) }] },
+    where: {
+      OR: [{ phone: normalized }, { phone: local }, { phone: local.slice(1) }],
+      // البوابة الفرعية تقصر البحث على مشتركي ناديها وحده
+      ...(clubSlug ? { club: { slug: clubSlug } } : {}),
+    },
     orderBy: { createdAt: "desc" },
     include: { club: { select: { id: true, name: true, waProvider: true } } },
   });
@@ -96,13 +100,25 @@ export type OtpVerifyResult =
   | { ok: false; message: string };
 
 // يتحقق من الرمز وينشئ حساب البوابة تلقائياً عند أول دخول
-export async function verifyOtp(phone: string, code: string): Promise<OtpVerifyResult> {
+export async function verifyOtp(
+  phone: string,
+  code: string,
+  clubSlug?: string
+): Promise<OtpVerifyResult> {
   const normalized = normalizePhone(phone);
   const clean = code.replace(/\D/g, "");
   if (clean.length !== 6) return { ok: false, message: "الرمز يتكوّن من ٦ أرقام" };
 
+  const club = clubSlug ? await db.club.findUnique({ where: { slug: clubSlug } }) : null;
+  if (clubSlug && !club) return { ok: false, message: "بوابة غير معروفة" };
+
   const record = await db.otpCode.findFirst({
-    where: { phone: normalized, usedAt: null, expiresAt: { gt: new Date() } },
+    where: {
+      phone: normalized,
+      usedAt: null,
+      expiresAt: { gt: new Date() },
+      ...(club ? { clubId: club.id } : {}),
+    },
     orderBy: { createdAt: "desc" },
   });
   if (!record) return { ok: false, message: "الرمز منتهٍ أو غير صحيح — اطلب رمزاً جديداً" };

@@ -1,4 +1,4 @@
-import { Building2, DatabaseBackup, Download, Fingerprint, KeyRound, MapPin, MessageCircle, Pencil, Plug, Power, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { Building2, DatabaseBackup, Download, Fingerprint, KeyRound, MapPin, MessageCircle, Pencil, Smartphone, Plug, Power, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
 import { db } from "@/lib/db";
 import { MODULE_ACCESS, ROLES, requireModule, type Role } from "@/lib/auth";
 import { ACTION_LABEL } from "@/lib/audit";
@@ -338,6 +338,32 @@ export default async function SettingsPage() {
             </tr>
           ))}
         </Table>
+      </Card>
+
+      <Card
+        title="بوابة مشتركي ناديك"
+        className="mt-5 p-5 pt-4"
+        action={<span className="text-xs text-slate-400 flex items-center gap-1.5"><Smartphone className="w-3.5 h-3.5" />شاركها مع أعضائك</span>}
+      >
+        <div className="rounded-xl bg-emerald-50 ring-1 ring-emerald-100 px-4 py-3.5">
+          <p className="text-xs text-emerald-700 mb-1.5">رابط بوابة مشتركيك — خاص بناديك وحده</p>
+          <p className="font-mono text-sm text-emerald-900 break-all" dir="ltr">
+            /c/{club.slug}/login
+          </p>
+        </div>
+        <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+          يدخل المشترك برقم جواله المسجّل لديك فيصله رمز مؤقت. لن يستطيع مشترك نادٍ
+          آخر الدخول من هذا الرابط، ولن يرى أعضاؤك أي بيانات خارج ناديك.
+        </p>
+        <a
+          href={`/c/${club.slug}/login`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex h-10 px-4 rounded-xl border border-slate-200 text-sm text-slate-600 items-center gap-1.5 hover:border-emerald-300 hover:text-emerald-700 transition"
+        >
+          <Smartphone className="w-4 h-4" />
+          افتح البوابة
+        </a>
       </Card>
 
       <Card

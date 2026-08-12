@@ -18,7 +18,6 @@ import {
 } from "lucide-react";
 import { getCurrentUser, homeFor } from "@/lib/auth";
 import { LoginForm } from "./login/login-form";
-import { DemoAccounts } from "./login/demo-accounts";
 
 const FEATURES = [
   {
@@ -219,7 +218,13 @@ export default async function HomePage() {
                     سجّل الدخول للوصول إلى لوحة إدارة ناديك
                   </p>
                   <LoginForm />
-                  <DemoAccounts />
+
+                  <Link
+                    href="/login"
+                    className="mt-5 flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition"
+                  >
+                    صفحة دخول مستقلة
+                  </Link>
                 </>
               )}
             </div>
