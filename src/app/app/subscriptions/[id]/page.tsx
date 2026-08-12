@@ -26,9 +26,9 @@ import {
   num,
   sar,
   sourceLabel,
-  subStatus,
   time,
 } from "@/lib/ui";
+import { membershipStatus } from "@/lib/membership";
 import { ConfirmButton, Dialog } from "@/components/dialog";
 import { Field, Input, Select, Submit } from "@/components/form";
 import { renew } from "../../actions";
@@ -57,7 +57,7 @@ export default async function MemberPage({ params }: PageProps<"/app/subscriptio
   if (!member) notFound();
 
   const current = member.subscriptions[0];
-  const st = current ? subStatus(current.endsAt, current.status) : null;
+  const st = membershipStatus(current);
   const totalPaid = member.invoices
     .filter((i) => i.status === "paid")
     .reduce((s, i) => s + i.totalSAR, 0);
@@ -152,13 +152,7 @@ export default async function MemberPage({ params }: PageProps<"/app/subscriptio
         <StatCard
           label="حالة الاشتراك"
           value={st?.label ?? "بلا اشتراك"}
-          hint={
-            st && st.key !== "frozen"
-              ? st.daysLeft > 0
-                ? `متبقٍ ${num(st.daysLeft)} يوم`
-                : `منتهٍ منذ ${num(-st.daysLeft)} يوم`
-              : undefined
-          }
+          hint={st?.remaining}
           icon={<CalendarCheck className="w-5 h-5" />}
           tone={st?.tone ?? "slate"}
         />
@@ -187,16 +181,21 @@ export default async function MemberPage({ params }: PageProps<"/app/subscriptio
             }
           >
             {member.subscriptions.map((s) => {
-              const sst = subStatus(s.endsAt, s.status);
+              const sst = membershipStatus(s)!;
               return (
                 <tr key={s.id} className="hover:bg-slate-50/60 transition">
-                  <Td className="font-bold">{s.plan.name}</Td>
+                  <Td className="font-bold">
+                    {s.plan.name}
+                    {s.plan.kind === "sessions" && (
+                      <span className="block text-xs font-normal text-violet-600">
+                        {num(s.sessionsUsed)} من {num(s.sessionsTotal)} حصة
+                      </span>
+                    )}
+                  </Td>
                   <Td className="text-slate-500 whitespace-nowrap text-xs">{fullDate(s.startsAt)}</Td>
                   <Td className="text-slate-500 whitespace-nowrap text-xs">{fullDate(s.endsAt)}</Td>
                   <Td>
-                    <Badge tone={s.status === "cancelled" ? "slate" : sst.tone}>
-                      {s.status === "cancelled" ? "ملغي" : sst.label}
-                    </Badge>
+                    <Badge tone={sst.tone}>{sst.label}</Badge>
                   </Td>
                   <Td>
                     {s.status !== "cancelled" && (

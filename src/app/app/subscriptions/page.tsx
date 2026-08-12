@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
 import { Badge, Card, Empty, PageHeader, StatCard, Table, Td, Th, fullDate, num, sar, sourceLabel, subStatus } from "@/lib/ui";
 import { ConfirmButton, Dialog } from "@/components/dialog";
-import { Field, Input, Submit } from "@/components/form";
+import { Field, Input, Select, Submit } from "@/components/form";
+import { membershipStatus, planSummary } from "@/lib/membership";
 import { addMember, renew, toggleFreeze } from "../actions";
 import { deletePlan, savePlan, togglePlan } from "../manage-actions";
 
@@ -102,6 +103,7 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/ap
                   <>
                     <Th>العضو</Th>
                     <Th>الباقة</Th>
+                    <Th>المتبقي</Th>
                     <Th>تنتهي في</Th>
                     <Th>المصدر</Th>
                     <Th>الحالة</Th>
@@ -110,7 +112,7 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/ap
                 }
               >
                 {subs.map((s) => {
-                  const st = subStatus(s.endsAt, s.status);
+                  const st = membershipStatus(s)!;
                   return (
                     <tr key={s.id} className="hover:bg-slate-50/60 transition">
                       <Td>
@@ -122,7 +124,15 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/ap
                         </Link>
                         <p className="text-xs text-slate-400 tabular-nums" dir="ltr">{s.member.phone}</p>
                       </Td>
-                      <Td className="text-slate-600">{s.plan.name}</Td>
+                      <Td className="text-slate-600">
+                        {s.plan.name}
+                        {s.plan.kind === "sessions" && (
+                          <span className="text-xs text-violet-600 block">باقة حصص</span>
+                        )}
+                      </Td>
+                      <Td className="text-slate-600 text-xs whitespace-nowrap">
+                        {membershipStatus(s)?.remaining ?? "—"}
+                      </Td>
                       <Td className="text-slate-500 whitespace-nowrap">{fullDate(s.endsAt)}</Td>
                       <Td>
                         <span className="text-xs text-slate-500">{sourceLabel[s.source] ?? s.source}</span>
@@ -188,7 +198,7 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/ap
                     .filter((p) => p.active)
                     .map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name} — {sar(p.priceSAR)}
+                        {p.name} — {sar(p.priceSAR)} ({planSummary(p)})
                       </option>
                     ))}
                 </select>
@@ -215,17 +225,30 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/ap
             action={
               <Dialog label="باقة جديدة" title="إضافة باقة" variant="ghost" icon={<Plus className="w-4 h-4" />}>
                 <form action={savePlan} className="space-y-3">
+                  <Field label="نوع الباقة">
+                    <Select name="kind" defaultValue="duration">
+                      <option value="duration">اشتراك زمني — دخول بلا حد خلال المدة</option>
+                      <option value="sessions">باقة حصص — عدد زيارات محدود</option>
+                    </Select>
+                  </Field>
                   <Field label="اسم الباقة">
-                    <Input name="name" required placeholder="نصف سنوي" />
+                    <Input name="name" required placeholder="١٢ حصة / نصف سنوي" />
                   </Field>
                   <div className="grid grid-cols-2 gap-3">
-                    <Field label="المدة (بالأيام)">
+                    <Field label="عدد الحصص (لباقة الحصص)">
+                      <Input name="sessionCount" type="number" min="1" defaultValue={12} />
+                    </Field>
+                    <Field label="الصلاحية بالأيام">
                       <Input name="durationDays" type="number" min="1" required defaultValue={30} />
                     </Field>
-                    <Field label="السعر (شامل الضريبة)">
-                      <Input name="priceSAR" type="number" min="0" step="1" required defaultValue={299} />
-                    </Field>
                   </div>
+                  <Field label="السعر (شامل الضريبة)">
+                    <Input name="priceSAR" type="number" min="0" step="1" required defaultValue={299} />
+                  </Field>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    في باقة الحصص تُخصم حصة واحدة لكل يوم حضور، وتنتهي الباقة باستهلاك
+                    الحصص أو انقضاء الصلاحية — أيهما أسبق.
+                  </p>
                   <Submit>إضافة الباقة</Submit>
                 </form>
               </Dialog>
@@ -235,29 +258,39 @@ export default async function SubscriptionsPage({ searchParams }: PageProps<"/ap
               {plans.map((p) => (
                 <li key={p.id} className="flex items-center gap-2 px-5 py-3">
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold flex items-center gap-2">
+                    <p className="text-sm font-bold flex items-center gap-2 flex-wrap">
                       {p.name}
+                      {p.kind === "sessions" && <Badge tone="violet">حصص</Badge>}
                       {!p.active && <Badge tone="slate">معطّلة</Badge>}
                     </p>
                     <p className="text-xs text-slate-400">
-                      {num(p.durationDays)} يوم · {sar(p.priceSAR)}
+                      {planSummary(p)} · {sar(p.priceSAR)}
                     </p>
                   </div>
 
                   <Dialog label="تعديل" title={`تعديل باقة ${p.name}`} variant="icon" icon={<Pencil className="w-4 h-4" />}>
                     <form action={savePlan} className="space-y-3">
                       <input type="hidden" name="planId" value={p.id} />
+                      <Field label="نوع الباقة">
+                        <Select name="kind" defaultValue={p.kind}>
+                          <option value="duration">اشتراك زمني</option>
+                          <option value="sessions">باقة حصص</option>
+                        </Select>
+                      </Field>
                       <Field label="اسم الباقة">
                         <Input name="name" defaultValue={p.name} required />
                       </Field>
                       <div className="grid grid-cols-2 gap-3">
-                        <Field label="المدة (بالأيام)">
+                        <Field label="عدد الحصص">
+                          <Input name="sessionCount" type="number" min="0" defaultValue={p.sessionCount} />
+                        </Field>
+                        <Field label="الصلاحية بالأيام">
                           <Input name="durationDays" type="number" min="1" defaultValue={p.durationDays} required />
                         </Field>
-                        <Field label="السعر">
-                          <Input name="priceSAR" type="number" min="0" step="1" defaultValue={p.priceSAR} required />
-                        </Field>
                       </div>
+                      <Field label="السعر">
+                        <Input name="priceSAR" type="number" min="0" step="1" defaultValue={p.priceSAR} required />
+                      </Field>
                       <Submit>حفظ</Submit>
                     </form>
                   </Dialog>

@@ -85,6 +85,9 @@ async function buildClub(opts: {
       { name: "3 شهور", durationDays: 90, priceSAR: 749 },
       { name: "6 شهور", durationDays: 180, priceSAR: 1349 },
       { name: "سنوي ذهبي", durationDays: 365, priceSAR: 2199 },
+      // باقات الحصص — للأندية التي تبيع بالزيارة لا بالمدة
+      { name: "باقة ٨ حصص", kind: "sessions", sessionCount: 8, durationDays: 45, priceSAR: 450 },
+      { name: "باقة ١٢ حصة", kind: "sessions", sessionCount: 12, durationDays: 60, priceSAR: 640 },
     ].map((p) => db.plan.create({ data: { ...p, clubId: club.id } }))
   );
 
@@ -119,6 +122,7 @@ async function buildClub(opts: {
     members.push(member);
 
     const subStart = shift(daysLeft - plan.durationDays);
+    const isSessions = plan.kind === "sessions";
     const sub = await db.subscription.create({
       data: {
         memberId: member.id,
@@ -126,6 +130,9 @@ async function buildClub(opts: {
         startsAt: subStart,
         endsAt: shift(daysLeft),
         paidSAR: plan.priceSAR,
+        sessionsTotal: isSessions ? plan.sessionCount : 0,
+        // بعض المشتركين استهلكوا جزءاً من حصصهم
+        sessionsUsed: isSessions ? Math.min(plan.sessionCount, i % (plan.sessionCount + 1)) : 0,
         status: i % 11 === 0 ? "frozen" : "active",
         frozenAt: i % 11 === 0 ? shift(-5) : null,
         source: i % 7 === 0 ? "app" : i % 5 === 0 ? "urpass" : "reception",

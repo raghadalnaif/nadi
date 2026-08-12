@@ -1,7 +1,8 @@
 import { CheckCircle2, MessageCircle, RefreshCw, Search, UserCheck, Users } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireModule } from "@/lib/auth";
-import { Badge, Card, Empty, PageHeader, StatCard, num, sar, subStatus, time } from "@/lib/ui";
+import { Badge, Card, Empty, PageHeader, StatCard, num, sar, time } from "@/lib/ui";
+import { membershipStatus } from "@/lib/membership";
 import { checkIn, renew } from "../actions";
 import { Scanner } from "./scanner";
 
@@ -35,7 +36,12 @@ export default async function ReceptionPage({ searchParams }: PageProps<"/app/re
         ...(q ? { OR: [{ name: { contains: q } }, { phone: { contains: q } }] } : {}),
       },
       include: {
-        subscriptions: { orderBy: { endsAt: "desc" }, take: 1, include: { plan: true } },
+        subscriptions: {
+          where: { status: { not: "cancelled" } },
+          orderBy: { endsAt: "desc" },
+          take: 1,
+          include: { plan: true },
+        },
         attendance: { where: { checkedAt: { gte: todayStart } }, take: 1 },
       },
       orderBy: { memberNo: "asc" },
@@ -77,7 +83,7 @@ export default async function ReceptionPage({ searchParams }: PageProps<"/app/re
           <div className="flex flex-col gap-2.5">
             {members.map((m) => {
               const sub = m.subscriptions[0];
-              const st = sub ? subStatus(sub.endsAt, sub.status) : null;
+              const st = membershipStatus(sub);
               const attended = m.attendance.length > 0;
               const wa = `https://wa.me/966${m.phone.replace(/^0/, "")}?text=${encodeURIComponent(
                 `مرحباً ${m.name}، انتهى اشتراكك في ${user.club?.name}. جدّد الآن وواصل تقدمك 💪`
@@ -106,20 +112,13 @@ export default async function ReceptionPage({ searchParams }: PageProps<"/app/re
                     <p className="font-bold truncate">{m.name}</p>
                     <p className="text-sm text-slate-500">
                       {sub?.plan.name ?? "بلا اشتراك"}
-                      {st && st.key !== "frozen" && (
-                        <>
-                          {" · "}
-                          {st.daysLeft <= 0
-                            ? `انتهى قبل ${num(-st.daysLeft)} يوم`
-                            : `تنتهي بعد ${num(st.daysLeft)} يوم`}
-                        </>
-                      )}
+                      {st && <> · {st.remaining}</>}
                     </p>
                   </div>
 
                   {st && <Badge tone={st.tone}>{st.label}</Badge>}
 
-                  {st?.key === "expired" ? (
+                  {st && !st.canEnter && st.key !== "frozen" ? (
                     <>
                       <a
                         href={wa}

@@ -284,7 +284,10 @@ model Plan {
   clubId       String
   club         Club    @relation(fields: [clubId], references: [id])
   name         String
-  durationDays Int
+  // duration = اشتراك زمني | sessions = باقة حصص محدودة
+  kind         String  @default("duration")
+  durationDays Int // للزمني: مدة الاشتراك · للحصص: مهلة استخدامها
+  sessionCount Int     @default(0) // عدد الحصص في باقة الحصص
   priceSAR     Float
   active       Boolean @default(true)
 
@@ -301,6 +304,9 @@ model Subscription {
   endsAt     DateTime
   paidSAR     Float
   discountSAR Float     @default(0)
+  // رصيد الحصص — يُستهلك عند كل حضور في باقات الحصص
+  sessionsTotal Int     @default(0)
+  sessionsUsed  Int     @default(0)
   offerId     String?
   offer       Offer?    @relation(fields: [offerId], references: [id])
   status      String    @default("active") // active | frozen | cancelled

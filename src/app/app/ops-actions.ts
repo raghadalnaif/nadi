@@ -7,6 +7,7 @@ import { generateApiKey } from "@/lib/api-auth";
 import { requireModule } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { runBackup } from "@/lib/backup";
+import { recordAttendance } from "@/lib/attendance";
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 const numOf = (fd: FormData, k: string) => Number(fd.get(k));
@@ -50,49 +51,26 @@ export async function checkInByCode(
       clubId: club.id,
       OR: [{ barcode: code }, { memberNo: Number(code) || -1 }, { phone: code }],
     },
-    include: { subscriptions: { orderBy: { endsAt: "desc" }, take: 1, include: { plan: true } } },
   });
 
   if (!member) return { ok: false, message: `لا يوجد عضو بالرمز ${code}`, tone: "error" };
 
-  const sub = member.subscriptions[0];
-  const daysLeft = sub ? Math.ceil((sub.endsAt.getTime() - Date.now()) / 86400000) : -1;
-
-  // منع دخول المنتهي اشتراكه إذا فعّل المدير هذا الخيار
-  if (club.blockExpiredEntry && (!sub || daysLeft <= 0 || sub.status === "frozen")) {
-    return {
-      ok: false,
-      memberName: member.name,
-      message:
-        sub?.status === "frozen"
-          ? `اشتراك ${member.name} مجمّد — الدخول متوقف`
-          : `اشتراك ${member.name} منتهٍ — يلزم التجديد`,
-      tone: "error",
-    };
-  }
-
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const already = await db.attendance.findFirst({
-    where: { memberId: member.id, checkedAt: { gte: todayStart } },
+  const result = await recordAttendance({
+    memberId: member.id,
+    source,
+    blockExpired: club.blockExpiredEntry,
   });
-  if (already) {
-    return { ok: true, memberName: member.name, message: `${member.name} حاضر مسبقاً اليوم`, tone: "warn" };
-  }
 
-  await db.attendance.create({ data: { memberId: member.id, source } });
   revalidatePath("/app/reception");
 
   return {
-    ok: true,
-    memberName: member.name,
-    message:
-      daysLeft > 0 && daysLeft <= 7
-        ? `أهلاً ${member.name} — تنبيه: اشتراكك ينتهي بعد ${daysLeft} يوم`
-        : `أهلاً ${member.name} — تم التحضير`,
-    tone: daysLeft > 0 && daysLeft <= 7 ? "warn" : "success",
+    ok: result.ok,
+    memberName: result.memberName,
+    message: result.ok && !result.duplicate ? `أهلاً ${result.message}` : result.message,
+    tone: result.tone,
   };
 }
+
 
 // توليد باركود لعضو ليس لديه واحد
 export async function generateMemberBarcode(formData: FormData) {

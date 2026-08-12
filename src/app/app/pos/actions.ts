@@ -6,6 +6,7 @@ import { requireModule } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { issueInvoice } from "@/lib/invoicing";
 import { queueMessage } from "@/lib/whatsapp";
+import { subscriptionFromPlan } from "@/lib/membership";
 
 const str = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 const fmtDate = (d: Date) => new Intl.DateTimeFormat("ar-SA", { dateStyle: "long" }).format(d);
@@ -92,11 +93,11 @@ export async function checkout(
       orderBy: { endsAt: "desc" },
     });
     const startsAt = last && last.endsAt > new Date() ? last.endsAt : new Date();
-    endsAt = new Date(startsAt);
-    endsAt.setDate(endsAt.getDate() + plan.durationDays);
+    const shape = subscriptionFromPlan(plan, startsAt);
+    endsAt = shape.endsAt;
 
     const sub = await db.subscription.create({
-      data: { memberId, planId: plan.id, startsAt, endsAt, paidSAR: plan.priceSAR },
+      data: { memberId, planId: plan.id, startsAt, paidSAR: plan.priceSAR, ...shape },
     });
     subscriptionId = sub.id;
     soldPlanName = plan.name;

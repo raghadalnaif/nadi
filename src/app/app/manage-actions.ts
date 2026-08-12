@@ -17,16 +17,18 @@ export async function savePlan(formData: FormData) {
   const name = str(formData, "name");
   const durationDays = numOf(formData, "durationDays");
   const priceSAR = numOf(formData, "priceSAR");
+  const kind = str(formData, "kind") === "sessions" ? "sessions" : "duration";
+  const sessionCount = kind === "sessions" ? Math.max(1, numOf(formData, "sessionCount") || 1) : 0;
   if (!name || !(durationDays > 0) || !(priceSAR >= 0)) return;
 
   if (id) {
     const existing = await db.plan.findFirst({ where: { id, clubId: user.clubId! } });
     if (!existing) return;
-    await db.plan.update({ where: { id }, data: { name, durationDays, priceSAR } });
+    await db.plan.update({ where: { id }, data: { name, durationDays, priceSAR, kind, sessionCount } });
     await audit({ user, action: "update", entity: "plan", entityId: id, summary: `تعديل باقة «${name}»` });
   } else {
     const plan = await db.plan.create({
-      data: { clubId: user.clubId!, name, durationDays, priceSAR },
+      data: { clubId: user.clubId!, name, durationDays, priceSAR, kind, sessionCount },
     });
     await audit({ user, action: "create", entity: "plan", entityId: plan.id, summary: `إضافة باقة «${name}» بسعر ${priceSAR} ر.س` });
   }

@@ -6,6 +6,8 @@ import { requireModule } from "@/lib/auth";
 import { issueInvoice } from "@/lib/invoicing";
 import { postExpense, postPayment } from "@/lib/ledger";
 import { queueMessage } from "@/lib/whatsapp";
+import { recordAttendance } from "@/lib/attendance";
+import { subscriptionFromPlan } from "@/lib/membership";
 
 // يمنع تعديل بيانات نادٍ آخر — تُستدعى في كل إجراء
 async function memberOfMyClub(memberId: string, clubId: string) {
@@ -47,15 +49,15 @@ export async function checkIn(formData: FormData) {
   const memberId = String(formData.get("memberId"));
   if (!(await memberOfMyClub(memberId, user.clubId!))) return;
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
-  const already = await db.attendance.findFirst({
-    where: { memberId, checkedAt: { gte: todayStart } },
+  const club = await db.club.findUnique({ where: { id: user.clubId! } });
+  await recordAttendance({
+    memberId,
+    source: "reception",
+    blockExpired: club?.blockExpiredEntry ?? true,
   });
-  if (!already) await db.attendance.create({ data: { memberId, source: "reception" } });
 
   revalidatePath("/app/reception");
+  revalidatePath("/app/subscriptions");
 }
 
 export async function renew(formData: FormData) {
@@ -73,11 +75,10 @@ export async function renew(formData: FormData) {
 
   const now = new Date();
   const startsAt = last.endsAt > now ? last.endsAt : now;
-  const endsAt = new Date(startsAt);
-  endsAt.setDate(endsAt.getDate() + last.plan.durationDays);
+  const shape = subscriptionFromPlan(last.plan, startsAt);
 
   const sub = await db.subscription.create({
-    data: { memberId, planId: last.planId, startsAt, endsAt, paidSAR: last.plan.priceSAR },
+    data: { memberId, planId: last.planId, startsAt, paidSAR: last.plan.priceSAR, ...shape },
   });
 
   // كل تجديد يولّد فاتورة ضريبية مرتبطة بسلسلة ZATCA
@@ -155,17 +156,18 @@ export async function addMember(formData: FormData) {
     },
   });
 
-  const endsAt = new Date();
-  endsAt.setDate(endsAt.getDate() + plan.durationDays);
+  const startsAt = new Date();
+  const shape = subscriptionFromPlan(plan, startsAt);
+  const endsAt = shape.endsAt;
   const sub = await db.subscription.create({
     data: {
       memberId: member.id,
       planId: plan.id,
-      startsAt: new Date(),
-      endsAt,
+      startsAt,
       paidSAR: finalPrice,
       discountSAR,
       offerId: offer?.id ?? null,
+      ...shape,
     },
   });
 

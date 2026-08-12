@@ -11,7 +11,8 @@ import {
 } from "lucide-react";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
-import { Badge, Bar, Card, Empty, PageHeader, StatCard, Table, Td, Th, fullDate, num, sar, subStatus, time } from "@/lib/ui";
+import { Badge, Bar, Card, Empty, PageHeader, StatCard, Table, Td, Th, fullDate, num, sar, time } from "@/lib/ui";
+import { membershipStatus } from "@/lib/membership";
 import { ConfirmButton } from "@/components/dialog";
 import { logout } from "@/app/login/actions";
 import { bookFromPortal, cancelMyBooking } from "@/app/portal/actions";
@@ -48,8 +49,8 @@ export default async function ClubPortalPage({ params }: PageProps<"/c/[slug]">)
   if (member.clubId !== club.id) redirect(`/c/${slug}/login`);
 
   const sub = member.subscriptions[0];
-  const st = sub ? subStatus(sub.endsAt, sub.status) : null;
-  const canBook = sub && sub.endsAt >= new Date() && sub.status === "active";
+  const st = membershipStatus(sub);
+  const canBook = st?.canEnter ?? false;
 
   // حصص الأيام الثلاثة القادمة
   const from = new Date();
@@ -122,9 +123,13 @@ export default async function ClubPortalPage({ params }: PageProps<"/c/[slug]">)
                 {st
                   ? st.key === "expired"
                     ? "اشتراك منتهٍ"
-                    : st.key === "frozen"
-                      ? "اشتراك مجمّد"
-                      : `${num(st.daysLeft)} يوم متبقٍ`
+                    : st.key === "exhausted"
+                      ? "انتهت حصصك"
+                      : st.key === "frozen"
+                        ? "اشتراك مجمّد"
+                        : st.isSessionPlan
+                          ? `${num(st.sessionsLeft)} حصة متبقية`
+                          : `${num(st.daysLeft)} يوم متبقٍ`
                   : "لا يوجد اشتراك"}
               </p>
               {sub && (
@@ -171,7 +176,9 @@ export default async function ClubPortalPage({ params }: PageProps<"/c/[slug]">)
           {!canBook ? (
             <div className="px-5 py-6 text-center">
               <p className="text-sm text-slate-500">
-                {st?.key === "expired"
+                {st?.key === "exhausted"
+                  ? "انتهت حصص باقتك — جدّد لتتمكن من الحجز"
+                  : st?.key === "expired"
                   ? "اشتراكك منتهٍ — جدّد لتتمكن من الحجز"
                   : st?.key === "frozen"
                     ? "اشتراكك مجمّد حالياً"
